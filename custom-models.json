@@ -1,0 +1,45 @@
+{
+  "$schema": "https://plandex.ai/schemas/models-input.schema.json",
+  "providers": [
+    {
+      "name": "my-ollama",
+      "baseUrl": "http://192.168.10.80:11434/v1",
+      "skipAuth": true
+    }
+  ],
+  "models": [
+    {
+      "modelId": "custom/qwen2.5-coder-32b",
+      "publisher": "ollama",
+      "description": "Qwen 2.5 32B Coder via Custom Ollama Provider",
+      "defaultMaxConvoTokens": 48000,
+      "maxTokens": 65536,
+      "maxOutputTokens": 8192,
+      "reservedOutputTokens": 1024,
+      "preferredOutputFormat": "xml",
+      "providers": [
+        {
+          "provider": "custom",
+          "customProvider": "my-ollama",
+          "modelName": "qwen2.5-coder:32b-instruct-q6_K"
+        }
+      ]
+    }
+  ],
+  "modelPacks": [
+    {
+      "name": "local-ollama",
+      "description": "Local Qwen 2.5 32b Coder via Ollama",
+      "$schema": "https://plandex.ai/schemas/model-pack-inline.schema.json",
+      "planner": "custom/qwen2.5-coder-32b",
+      "architect": "custom/qwen2.5-coder-32b",
+      "coder": "custom/qwen2.5-coder-32b",
+      "summarizer": "custom/qwen2.5-coder-32b",
+      "builder": "custom/qwen2.5-coder-32b",
+      "wholeFileBuilder": "custom/qwen2.5-coder-32b",
+      "names": "custom/qwen2.5-coder-32b",
+      "commitMessages": "custom/qwen2.5-coder-32b",
+      "autoContinue": "custom/qwen2.5-coder-32b"
+    }
+  ]
+}

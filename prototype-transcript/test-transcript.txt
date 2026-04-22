@@ -1,0 +1,25 @@
+Meeting Details:
+·	Project: "World's Fair Companion" – Unaffiliated conference web app.
+·	Participants: Sarah (Product Manager), Marcus (Lead Engineer), and Chloe (UX/UI Designer).
+·	Duration: 60 minutes (Condensed)
+[00:00:15] Sarah: Alright, let’s dive in. We’re building an unofficial, community-driven web app for the AI Engineer World’s Fair. It’s happening June 29th through July 2nd at Moscone Center in SF. They’re expecting around 6,000 AI engineers, founders, and CTOs. The official apps for these things are usually just ported over from generic event platforms. We want to build something specifically for AI engineers—high signal, extremely fast, and tailored to how developers actually navigate a massive conference.
+[00:01:30] Marcus: I like it. If we’re targeting AI engineers, the performance has to be flawless, or we’ll be roasted on X within an hour. What are the core features we’re prioritizing for MVP?
+[00:02:10] Sarah: The biggest pain point at an event this size—they have something like 29 different tracks and over 400 sessions—is schedule collision. Attendees need to aggressively filter by specific tech stacks. Think less "what's happening at 2 PM" and more "show me all the talks on local LLM orchestration and RAG pipelines."
+[00:03:05] Chloe: From a UI perspective, that means search and filtering have to be front and center, not buried in a hamburger menu. I’m thinking a very IDE-like interface. Dark mode by default, obviously. Maybe a command-palette style search bar at the top, like hitting Cmd+K, so they can just type what they are looking for.
+[00:04:20] Marcus: A command palette is brilliant. We can hook that up to a lightweight vector search on the backend so it handles semantic queries. If someone types "running models locally," it should surface talks on ONNX, vLLM, and edge deployments even if those exact words aren't in the query.
+[00:15:45] Sarah: Let's talk about the hallway track. The conference has official networking, but since we are unaffiliated, we don't have access to their attendee database. How do we make this social without requiring a massive critical mass from day one?
+[00:17:10] Marcus: What if we focus on "interest beacons" rather than direct messaging? Users can opt-in to broadcast what they are hacking on. We generate a temporary QR code or a short link on their profile. When two people meet between sessions, they scan it, and it instantly swaps GitHub profiles and current projects.
+[00:19:00] Chloe: That’s clean. I can design a digital "badge" view that looks like a raw JSON or terminal output. Very utilitarian. We should also include an offline mode. Moscone Center Wi-Fi is notoriously bad when you cram thousands of developers into it.
+[00:22:30] Marcus: Good call. We can use a PWA approach. Cache the schedule, speaker data, and expo map locally on the first load using service workers. If they drop offline, the core app still functions perfectly, and we queue up any profile updates to sync when they reconnect.
+[00:35:10] Sarah: What about the Expo? There are going to be over 100 partners there. Wandering around 3.5 days of expo stages is completely overwhelming.
+[00:36:55] Chloe: We could map the expo floor and let users "pin" the booths they want to visit. I can create a minimalist vector map that highlights their pinned booths and calculates the most efficient walking route so they aren't ping-ponging across the hall all day.
+[00:40:20] Marcus: Route optimization for a conference floor? That’s aggressive for an MVP, but I love it. Let’s just use a basic A-star algorithm on a grid map of the floor plan for now. We can scrape the public exhibitor list to populate the nodes.
+[00:52:10] Sarah: This sounds solid. So our core pillars are: Cmd+K semantic schedule search, offline-first architecture, IDE-aesthetic UI, and an optimized expo map. Marcus, what stack are you thinking for this?
+[00:54:00] Marcus: Keep it modern but stable. Next.js for the web app, Tailwind for the styling since Chloe wants that clean, terminal-like UI. We can use Supabase for the backend to handle the schedule syncing and the vector search via pgvector. We can host it on Vercel for edge caching.
+[00:57:30] Chloe: I’ll start mocking up the command palette and the offline digital badge. I’ll have some high-fidelity Figma frames ready by our standup on Thursday.
+[00:58:45] Sarah: Perfect. I’ll start compiling the initial data structure by pulling the public schedule and speaker list from the AI Engineer site so we have real data to populate the staging environment. Let's reconvene then.
+
+
+
+
+

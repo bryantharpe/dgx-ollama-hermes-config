@@ -1,0 +1,407 @@
+:root {
+    --color-primary: #6366f1;
+    --color-secondary: #8b5cf6;
+    --color-accent: #ec4899;
+    --color-background: #0f172a;
+    --color-surface: #1e293b;
+    --color-text: #f8fafc;
+    --color-text-secondary: #94a3b8;
+    --color-success: #10b981;
+    --color-warning: #f59e0b;
+    --color-error: #ef4444;
+    --color-info: #3b82f6;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background-color: var(--color-background);
+    color: var(--color-text);
+    line-height: 1.6;
+    overflow-x: hidden;
+}
+
+header.app-header {
+    background-color: var(--color-surface);
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--color-primary);
+}
+
+header.app-header h1 {
+    font-size: 1.5rem;
+    color: var(--color-primary);
+}
+
+.theme-toggle {
+    background-color: var(--color-primary);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.theme-toggle:hover {
+    background-color: var(--color-secondary);
+}
+
+#app-main {
+    padding: 1rem;
+    min-height: calc(100vh - 120px);
+}
+
+.nav-bar {
+    display: flex;
+    justify-content: space-around;
+    background-color: var(--color-surface);
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.nav-link {
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    transition: all 0.3s;
+}
+
+.nav-link:hover,
+.nav-link.active {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.view {
+    display: none;
+}
+
+.view.active {
+    display: block;
+}
+
+h2 {
+    color: var(--color-primary);
+    margin-bottom: 1rem;
+}
+
+.filter-bar,
+.action-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.filter-label {
+    color: var(--color-text-secondary);
+    align-self: center;
+}
+
+.day-filter,
+.track-filter,
+.expo-category,
+.contact-category {
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-primary);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.3s;
+}
+
+.day-filter:hover,
+.track-filter:hover,
+.expo-category:hover,
+.contact-category:hover {
+    background-color: var(--color-primary);
+}
+
+.day-filter.active,
+.track-filter.active,
+.expo-category.active,
+.contact-category.active {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.search-bar {
+    margin-bottom: 1rem;
+}
+
+.search-bar input {
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-primary);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    font-size: 1rem;
+}
+
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.3s;
+}
+
+.btn-primary {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: var(--color-secondary);
+}
+
+.btn-secondary {
+    background-color: var(--color-secondary);
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: var(--color-accent);
+}
+
+.btn-outline {
+    background-color: transparent;
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+}
+
+.schedule-list,
+.expo-list,
+.contacts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.event-card,
+.booth-card,
+.contact-card {
+    background-color: var(--color-surface);
+    padding: 1rem;
+    border-radius: 0.75rem;
+    border-left: 4px solid var(--color-primary);
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.event-card:hover,
+.booth-card:hover,
+.contact-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.event-header,
+.booth-header,
+.contact-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.event-time,
+.booth-number,
+.contact-category {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+}
+
+.event-title,
+.booth-company,
+.contact-name {
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+}
+
+.event-speaker,
+.contact-company {
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+}
+
+.event-description,
+.booth-description,
+.contact-phones {
+    margin: 0.5rem 0;
+}
+
+.event-location {
+    margin-top: 0.5rem;
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+}
+
+.booth-features,
+.contact-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.feature-tag {
+    background-color: var(--color-primary);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+}
+
+.phone-tag {
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+    border: 1px solid var(--color-primary);
+}
+
+.badge-container {
+    display: flex;
+    justify-content: center;
+}
+
+.badge-card {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+    padding: 2rem;
+    border-radius: 1rem;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+}
+
+.badge-id {
+    display: block;
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.badge-card h3 {
+    font-size: 2rem;
+    color: white;
+    margin-bottom: 0.5rem;
+}
+
+.badge-subtitle {
+    color: white;
+    margin: 0.25rem 0;
+    font-size: 1rem;
+}
+
+#qr-code {
+    margin: 1.5rem 0;
+}
+
+.status-bar {
+    background-color: var(--color-surface);
+    padding: 0.5rem;
+    text-align: center;
+    border-top: 1px solid var(--color-primary);
+}
+
+.status-success {
+    color: var(--color-success);
+}
+
+.status-error {
+    color: var(--color-error);
+}
+
+.no-events,
+.no-booths,
+.no-contacts {
+    text-align: center;
+    color: var(--color-text-secondary);
+    padding: 2rem;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background-color: var(--color-surface);
+    padding: 1.5rem;
+    border-radius: 1rem;
+    max-width: 90%;
+    width: 400px;
+    position: relative;
+}
+
+.modal-content h2 {
+    color: var(--color-primary);
+    margin-bottom: 1rem;
+}
+
+.modal-body {
+    color: var(--color-text);
+}
+
+.modal-close {
+    position: absolute;
+    top: 0.5rem;
+    right: 1rem;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+}
+
+.modal-close:hover {
+    color: var(--color-error);
+}
+
+@media (min-width: 768px) {
+    #app-main {
+        padding: 2rem;
+    }
+
+    .nav-bar {
+        max-width: 600px;
+        margin: 0 auto 1rem;
+    }
+
+    .event-card,
+    .booth-card,
+    .contact-card {
+        padding: 1.5rem;
+    }
+}

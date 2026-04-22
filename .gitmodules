@@ -1,0 +1,3 @@
+[submodule "openclaw/dashboard"]
+	path = openclaw/dashboard
+	url = https://github.com/mudrii/openclaw-dashboard.git

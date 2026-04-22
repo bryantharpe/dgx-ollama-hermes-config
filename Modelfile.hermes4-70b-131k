@@ -1,0 +1,67 @@
+FROM hf.co/bartowski/NousResearch_Hermes-4-70B-GGUF:Q4_K_M
+
+PARAMETER num_ctx 131072
+PARAMETER temperature 0.6
+PARAMETER top_p 0.95
+PARAMETER top_k 20
+PARAMETER stop "<|eot_id|>"
+PARAMETER stop "<|end_of_text|>"
+PARAMETER stop "<|start_header_id|>"
+PARAMETER stop "<|end_header_id|>"
+
+SYSTEM """
+You are Hermes, an autonomous orchestration agent. Your tool calls execute real operations: filesystem writes, shell commands, HTTP requests, and handoffs to sibling agents.
+
+When a Skill is invoked, treat its instructions as executable steps. For each step the Skill mandates, emit a concrete tool call — not a prose description of what should happen, not a plan summary, not a paraphrase. Narrating without tool-calling is a failure of the Skill.
+
+Never fabricate results. If you are unsure whether a step completed, verify with a read-only tool call (ls, curl GET, cat) before claiming progress. If a tool call fails, report the error and stop — do not claim success that did not happen.
+
+When reasoning, wrap it in <think>...</think>.
+"""
+
+TEMPLATE """{{ if .Messages }}
+{{- if or .System .Tools }}<|start_header_id|>system<|end_header_id|>
+
+{{ if .System }}{{ .System }}
+{{ end }}
+{{- if .Tools }}You are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags. You may call one or more functions to assist with the user query. Don't make assumptions about what values to plug into functions. For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:
+<tool_call>
+{"name": <function-name>, "arguments": <args-dict>}
+</tool_call>
+<tools>
+{{ range .Tools }}{{ .Function }}
+{{ end }}</tools>
+{{- end }}<|eot_id|>
+{{- end }}
+{{- range $i, $_ := .Messages }}
+{{- $last := eq (len (slice $.Messages $i)) 1 }}
+{{- if eq .Role "user" }}<|start_header_id|>user<|end_header_id|>
+
+{{ .Content }}<|eot_id|>{{ if $last }}<|start_header_id|>assistant<|end_header_id|>
+
+{{ end }}
+{{- else if eq .Role "assistant" }}<|start_header_id|>assistant<|end_header_id|>
+
+{{- if .ToolCalls }}<tool_call>
+{{- range .ToolCalls }}{"name": "{{ .Function.Name }}", "arguments": {{ .Function.Arguments }}}
+{{- end }}
+</tool_call>{{ if not $last }}<|eot_id|>{{ end }}
+{{- else }}{{ .Content }}{{ if not $last }}<|eot_id|>{{ end }}
+{{- end }}
+{{- else if eq .Role "tool" }}<|start_header_id|>tool<|end_header_id|>
+
+<tool_response>
+{{ .Content }}
+</tool_response><|eot_id|>{{ if $last }}<|start_header_id|>assistant<|end_header_id|>
+
+{{ end }}
+{{- end }}
+{{- end }}
+{{- else }}
+{{- if .System }}<|start_header_id|>system<|end_header_id|>
+
+{{ .System }}<|eot_id|>{{ end }}{{ if .Prompt }}<|start_header_id|>user<|end_header_id|>
+
+{{ .Prompt }}<|eot_id|>{{ end }}<|start_header_id|>assistant<|end_header_id|>
+
+{{ end }}{{ .Response }}{{ if .Response }}<|eot_id|>{{ end }}"""

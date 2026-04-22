@@ -1,0 +1,11 @@
+FROM qwen3.5:122b
+PARAMETER num_ctx 16384
+PARAMETER presence_penalty 1.5
+PARAMETER repeat_penalty 1.1
+PARAMETER temperature 0.7
+PARAMETER top_p 0.8
+SYSTEM """
+You are a helpful assistant.
+If you use a thinking process, always wrap it strictly in <think> and </think> tags.
+Do not use </thinking>.
+"""

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World's Fair Companion AI</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <h1 class="title">AI Engineer World's Fair Companion</h1>
+            <nav class="nav">
+                <button class="nav-btn active" data-view="schedule">Schedule</button>
+                <button class="nav-btn" data-view="expo">Expo Map</button>
+                <button class="nav-btn" data-view="qr">QR Badge</button>
+                <button class="nav-btn" data-view="contacts">Contacts</button>
+            </nav>
+            <button id="cmd-palette-trigger" class="cmd-btn">Cmd+K</button>
+        </header>
+
+        <!-- Command Palette Overlay -->
+        <div id="cmd-palette" class="cmd-overlay hidden" style="display:none">
+            <div class="cmd-input-wrapper">
+                <input type="text" id="cmd-input" placeholder="Search talks, speakers, booths...">
+                <span class="cmd-shortcut">_esc_</span>
+            </div>
+            <div id="cmd-results" class="cmd-results"></div>
+        </div>
+
+        <!-- Schedule View -->
+        <div id="view-schedule" class="view active">
+            <div class="view-header">
+                <div class="day-tabs">
+                    <button class="day-btn active" data-day="Day 1">Day 1</button>
+                    <button class="day-btn" data-day="Day 2">Day 2</button>
+                    <button class="day-btn" data-day="Day 3">Day 3</button>
+                    <button class="day-btn" data-day="Day 4">Day 4</button>
+                </div>
+                <div class="tag-filters" id="tag-filters"></div>
+            </div>
+            <div class="talks-list" id="talks-list"></div>
+            <div id="talk-detail" class="talk-detail hidden" style="display:none">
+                <div class="talk-detail-content">
+                    <button class="close-btn" id="close-detail">&times;</button>
+                    <h2 id="detail-title"></h2>
+                    <div id="detail-info"></div>
+                    <p id="detail-desc"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Expo Map View -->
+        <div id="view-expo" class="view hidden" style="display:none">
+            <div class="view-header">
+                <input type="text" id="expo-search" placeholder="Search booths...">
+                <button id="calc-route-btn" class="btn-primary hidden" style="display:none">Calculate Route</button>
+            </div>
+            <div class="expo-container">
+                <div id="expo-map"></div>
+            </div>
+        </div>
+
+        <!-- QR Badge View -->
+        <div id="view-qr" class="view hidden" style="display:none">
+            <div class="qr-container">
+                <div id="qr-generation">
+                    <h2>Your Digital Badge</h2>
+                    <div class="badge-card">
+                        <div class="badge-label">Name</div>
+                        <div class="badge-value" id="badge-name">AI Engineer</div>
+                        <div class="badge-label">GitHub</div>
+                        <div class="badge-value" id="badge-github">ai-engineer</div>
+                        <div class="badge-label">Project</div>
+                        <div class="badge-value" id="badge-project">Worlds Fair Companion</div>
+                        <div class="badge-label">ID</div>
+                        <div class="badge-value" id="badge-source-id">badge-001</div>
+                    </div>
+                    <canvas id="qr-canvas"></canvas>
+                    <p class="qr-hint">Scan this QR code to share your contact info</p>
+                </div>
+                <div id="qr-scanning" class="hidden" style="display:none">
+                    <div id="camera-container">
+                        <video id="camera"></video>
+                        <canvas id="scan-canvas"></canvas>
+                    </div>
+                    <button class="btn-primary" id="start-scan">Start Camera</button>
+                    <p class="qr-hint">Frame a QR code to scan</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contacts View -->
+        <div id="view-contacts" class="view hidden" style="display:none">
+            <h2>Saved Contacts</h2>
+            <div class="contacts-list" id="contacts-list"></div>
+        </div>
+    </div>
+
+    <script src="/static/qrcode.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

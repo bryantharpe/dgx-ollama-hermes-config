@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<!--
+  URL → filesystem mapping (load-bearing — the /static mount is FLAT):
+
+      URL                      lives at
+      ──────────────────────── ──────────────────────────────
+      /static/style.css        src/frontend/style.css
+      /static/app.js           src/frontend/app.js
+      /static/<name>.js        src/frontend/<name>.js
+      /static/<name>.svg       src/frontend/<name>.svg
+
+  Do NOT put files in src/frontend/js/, src/frontend/css/, or src/frontend/static/
+  — the /static mount serves src/frontend/ directly, so any subdir needs to be
+  repeated in the URL (e.g. /static/js/foo.js → src/frontend/js/foo.js). Keeping
+  things flat is the simpler convention; stick with it.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <main id="app">
+        <h1>Prototype</h1>
+        <p id="status">booting…</p>
+    </main>
+    <script src="/static/app.js"></script>
+</body>
+</html>

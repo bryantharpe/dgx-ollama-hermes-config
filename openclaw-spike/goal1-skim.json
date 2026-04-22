@@ -1,0 +1,1139 @@
+{
+  "model": "qwen3.6-35b:128k",
+  "stream": true,
+  "options": {
+    "num_ctx": 128000
+  },
+  "think": false,
+  "tools_count": 16,
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "read",
+        "description": "Read the contents of a file. Supports text files and images (jpg, png, gif, webp). Images are sent as attachments. For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.",
+        "parameters": {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "description": "Path to the file to read (relative or absolute)",
+              "type": "string"
+            },
+            "offset": {
+              "description": "Line number to start reading from (1-indexed)",
+              "type": "number"
+            },
+            "limit": {
+              "description": "Maximum number of lines to read",
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "edit",
+        "description": "Edit a single file using exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file. If two changes affect the same block or nearby lines, merge them into one edit instead of emitting overlapping edits. Do not include large unchanged regions just to connect distant changes.",
+        "parameters": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "path",
+            "edits"
+          ],
+          "properties": {
+            "path": {
+              "description": "Path to the file to edit (relative or absolute)",
+              "type": "string"
+            },
+            "edits": {
+              "description": "One or more targeted replacements. Each edit is matched against the original file, not incrementally. Do not include overlapping or nested edits. If two changes touch the same block or nearby lines, merge them into one edit instead.",
+              "type": "array",
+              "items": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "oldText",
+                  "newText"
+                ],
+                "properties": {
+                  "oldText": {
+                    "description": "Exact text for one targeted replacement. It must be unique in the original file and must not overlap with any other edits[].oldText in the same call.",
+                    "type": "string"
+                  },
+                  "newText": {
+                    "description": "Replacement text for this targeted edit.",
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "write",
+        "description": "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories.",
+        "parameters": {
+          "type": "object",
+          "required": [
+            "path",
+            "content"
+          ],
+          "properties": {
+            "path": {
+              "description": "Path to the file to write (relative or absolute)",
+              "type": "string"
+            },
+            "content": {
+              "description": "Content to write to the file",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "exec",
+        "description": "Execute shell commands with background continuation for work that starts now. Use yieldMs/background to continue later via process tool. For long-running work started now, rely on automatic completion wake when it is enabled and the command emits output or fails; otherwise use process to confirm completion. Use process whenever you need logs, status, input, or intervention. Do not use exec sleep or delay loops for reminders or deferred follow-ups; use cron instead. Use pty=true for TTY-required commands (terminal UIs, coding agents).",
+        "parameters": {
+          "type": "object",
+          "required": [
+            "command"
+          ],
+          "properties": {
+            "command": {
+              "description": "Shell command to execute",
+              "type": "string"
+            },
+            "workdir": {
+              "description": "Working directory (defaults to cwd)",
+              "type": "string"
+            },
+            "env": {
+              "type": "object",
+              "patternProperties": {
+                "^(.*)$": {
+                  "type": "string"
+                }
+              }
+            },
+            "yieldMs": {
+              "description": "Milliseconds to wait before backgrounding (default 10000)",
+              "type": "number"
+            },
+            "background": {
+              "description": "Run in background immediately",
+              "type": "boolean"
+            },
+            "timeout": {
+              "description": "Timeout in seconds (optional, kills process on expiry)",
+              "type": "number"
+            },
+            "pty": {
+              "description": "Run in a pseudo-terminal (PTY) when available (TTY-required CLIs, coding agents)",
+              "type": "boolean"
+            },
+            "elevated": {
+              "description": "Run on the host with elevated permissions (if allowed)",
+              "type": "boolean"
+            },
+            "host": {
+              "description": "Exec host/target (auto|sandbox|gateway|node).",
+              "type": "string"
+            },
+            "security": {
+              "description": "Exec security mode (deny|allowlist|full).",
+              "type": "string"
+            },
+            "ask": {
+              "description": "Exec ask mode (off|on-miss|always).",
+              "type": "string"
+            },
+            "node": {
+              "description": "Node id/name for host=node.",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "process",
+        "description": "Manage running exec sessions for commands already started: list, poll, log, write, send-keys, submit, paste, kill. Use poll/log when you need status, logs, quiet-success confirmation, or completion confirmation when automatic completion wake is unavailable. Use write/send-keys/submit/paste/kill for input or intervention. Do not use process polling to emulate timers or reminders; use cron for scheduled follow-ups.",
+        "parameters": {
+          "type": "object",
+          "required": [
+            "action"
+          ],
+          "properties": {
+            "action": {
+              "description": "Process action",
+              "type": "string"
+            },
+            "sessionId": {
+              "description": "Session id for actions other than list",
+              "type": "string"
+            },
+            "data": {
+              "description": "Data to write for write",
+              "type": "string"
+            },
+            "keys": {
+              "description": "Key tokens to send for send-keys",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "hex": {
+              "description": "Hex bytes to send for send-keys",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "literal": {
+              "description": "Literal string for send-keys",
+              "type": "string"
+            },
+            "text": {
+              "description": "Text to paste for paste",
+              "type": "string"
+            },
+            "bracketed": {
+              "description": "Wrap paste in bracketed mode",
+              "type": "boolean"
+            },
+            "eof": {
+              "description": "Close stdin after write",
+              "type": "boolean"
+            },
+            "offset": {
+              "description": "Log offset",
+              "type": "number"
+            },
+            "limit": {
+              "description": "Log length",
+              "type": "number"
+            },
+            "timeout": {
+              "description": "For poll: wait up to this many milliseconds before returning",
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "cron",
+        "description": "Manage Gateway cron jobs (status/list/add/update/remove/run/runs) and send wake events. Use this for reminders, \"check back later\" requests, delayed follow-ups, and recurring tasks. Do not emulate scheduling with exec sleep or process polling.\n\nMain-session cron jobs enqueue system events for heartbeat handling. Isolated cron jobs create background task runs that appear in `openclaw tasks`.\n\nACTIONS:\n- status: Check cron scheduler status\n- list: List jobs (use includeDisabled:true to include disabled)\n- add: Create job (requires job object, see schema below)\n- update: Modify job (requires jobId + patch object)\n- remove: Delete job (requires jobId)\n- run: Trigger job immediately (requires jobId)\n- runs: Get job run history (requires jobId)\n- wake: Send wake event (requires text, optional mode)\n\nJOB SCHEMA (for add action):\n{\n  \"name\": \"string (optional)\",\n  \"schedule\": { ... },      // Required: when to run\n  \"payload\": { ... },       // Required: what to execute\n  \"delivery\": { ... },      // Optional: announce summary (isolated/current/session:xxx only) or webhook POST\n  \"sessionTarget\": \"main\" | \"isolated\" | \"current\" | \"session:<custom-id>\",  // Optional, defaults based on context\n  \"enabled\": true | false   // Optional, default true\n}\n\nSESSION TARGET OPTIONS:\n- \"main\": Run in the main session (requires payload.kind=\"systemEvent\")\n- \"isolated\": Run in an ephemeral isolated session (requires payload.kind=\"agentTurn\")\n- \"current\": Bind to the current session where the cron is created (resolved at creation time)\n- \"session:<custom-id>\": Run in a persistent named session (e.g., \"session:project-alpha-daily\")\n\nDEFAULT BEHAVIOR (unchanged for backward compatibility):\n- payload.kind=\"systemEvent\" \u00e2\u0086\u0092 defaults to \"main\"\n- payload.kind=\"agentTurn\" \u00e2\u0086\u0092 defaults to \"isolated\"\nTo use current session binding, explicitly set sessionTarget=\"current\".\n\nSCHEDULE TYPES (schedule.kind):\n- \"at\": One-shot at absolute time\n  { \"kind\": \"at\", \"at\": \"<ISO-8601 timestamp>\" }\n- \"every\": Recurring interval\n  { \"kind\": \"every\", \"everyMs\": <interval-ms>, \"anchorMs\": <optional-start-ms> }\n- \"cron\": Cron expression\n  { \"kind\": \"cron\", \"expr\": \"<cron-expression>\", \"tz\": \"<optional-timezone>\" }\n\nISO timestamps without an explicit timezone are treated as UTC.\n\nPAYLOAD TYPES (payload.kind):\n- \"systemEvent\": Injects text as system event into session\n  { \"kind\": \"systemEvent\", \"text\": \"<message>\" }\n- \"agentTurn\": Runs agent with message (isolated sessions only)\n  { \"kind\": \"agentTurn\", \"message\": \"<prompt>\", \"model\": \"<optional>\", \"thinking\": \"<optional>\", \"timeoutSeconds\": <optional, 0 means no timeout> }\n\nDELIVERY (top-level):\n  { \"mode\": \"none|announce|webhook\", \"channel\": \"<optional>\", \"to\": \"<optional>\", \"bestEffort\": <optional-bool> }\n  - Default for isolated agentTurn jobs (when delivery omitted): \"announce\"\n  - announce: send to chat channel (optional channel/to target)\n  - webhook: send finished-run event as HTTP POST to delivery.to (URL required)\n  - If the task needs to send to a specific chat/recipient, set announce delivery.channel/to; do not call messaging tools inside the run.\n\nCRITICAL CONSTRAINTS:\n- sessionTarget=\"main\" REQUIRES payload.kind=\"systemEvent\"\n- sessionTarget=\"isolated\" | \"current\" | \"session:xxx\" REQUIRES payload.kind=\"agentTurn\"\n- For webhook callbacks, use delivery.mode=\"webhook\" with delivery.to set to a URL.\nDefault: prefer isolated agentTurn jobs unless the user explicitly wants current-session binding.\n\nWAKE MODES (for wake action):\n- \"next-heartbeat\" (default): Wake on next heartbeat\n- \"now\": Wake immediately\n\nUse jobId as the canonical identifier; id is accepted for compatibility. Use contextMessages (0-10) to add previous messages as context to the job text.",
+        "parameters": {
+          "additionalProperties": true,
+          "type": "object",
+          "required": [
+            "action"
+          ],
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "status",
+                "list",
+                "add",
+                "update",
+                "remove",
+                "run",
+                "runs",
+                "wake"
+              ]
+            },
+            "gatewayUrl": {
+              "type": "string"
+            },
+            "gatewayToken": {
+              "type": "string"
+            },
+            "timeoutMs": {
+              "type": "number"
+            },
+            "includeDisabled": {
+              "type": "boolean"
+            },
+            "job": {
+              "additionalProperties": true,
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Job name",
+                  "type": "string"
+                },
+                "schedule": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "at",
+                        "every",
+                        "cron"
+                      ],
+                      "description": "Schedule type"
+                    },
+                    "at": {
+                      "description": "ISO-8601 timestamp (kind=at)",
+                      "type": "string"
+                    },
+                    "everyMs": {
+                      "description": "Interval in milliseconds (kind=every)",
+                      "type": "number"
+                    },
+                    "anchorMs": {
+                      "description": "Optional start anchor in milliseconds (kind=every)",
+                      "type": "number"
+                    },
+                    "expr": {
+                      "description": "Cron expression (kind=cron)",
+                      "type": "string"
+                    },
+                    "tz": {
+                      "description": "IANA timezone (kind=cron)",
+                      "type": "string"
+                    },
+                    "staggerMs": {
+                      "description": "Random jitter in ms (kind=cron)",
+                      "type": "number"
+                    }
+                  }
+                },
+                "sessionTarget": {
+                  "description": "Session target: \"main\", \"isolated\", \"current\", or \"session:<id>\"",
+                  "type": "string"
+                },
+                "wakeMode": {
+                  "type": "string",
+                  "enum": [
+                    "now",
+                    "next-heartbeat"
+                  ],
+                  "description": "When to wake the session"
+                },
+                "payload": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "systemEvent",
+                        "agentTurn"
+                      ],
+                      "description": "Payload type"
+                    },
+                    "text": {
+                      "description": "Message text (kind=systemEvent)",
+                      "type": "string"
+                    },
+                    "message": {
+                      "description": "Agent prompt (kind=agentTurn)",
+                      "type": "string"
+                    },
+                    "model": {
+                      "description": "Model override",
+                      "type": "string"
+                    },
+                    "thinking": {
+                      "description": "Thinking level override",
+                      "type": "string"
+                    },
+                    "timeoutSeconds": {
+                      "type": "number"
+                    },
+                    "lightContext": {
+                      "type": "boolean"
+                    },
+                    "allowUnsafeExternalContent": {
+                      "type": "boolean"
+                    },
+                    "fallbacks": {
+                      "description": "Fallback model ids",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "toolsAllow": {
+                      "description": "Allowed tool ids",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "delivery": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "announce",
+                        "webhook"
+                      ],
+                      "description": "Delivery mode"
+                    },
+                    "channel": {
+                      "description": "Delivery channel",
+                      "type": "string"
+                    },
+                    "to": {
+                      "description": "Delivery target",
+                      "type": "string"
+                    },
+                    "bestEffort": {
+                      "type": "boolean"
+                    },
+                    "accountId": {
+                      "description": "Account target for delivery",
+                      "type": "string"
+                    },
+                    "failureDestination": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "properties": {
+                        "channel": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "accountId": {
+                          "type": "string"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "announce",
+                            "webhook"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "agentId": {
+                  "description": "Agent id, or null to keep it unset",
+                  "type": "string"
+                },
+                "description": {
+                  "description": "Human-readable description",
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "deleteAfterRun": {
+                  "description": "Delete after first execution",
+                  "type": "boolean"
+                },
+                "sessionKey": {
+                  "description": "Explicit session key, or null to clear it",
+                  "type": "string"
+                },
+                "failureAlert": {
+                  "type": "object",
+                  "properties": {
+                    "after": {
+                      "description": "Failures before alerting",
+                      "type": "number"
+                    },
+                    "channel": {
+                      "description": "Alert channel",
+                      "type": "string"
+                    },
+                    "to": {
+                      "description": "Alert target",
+                      "type": "string"
+                    },
+                    "cooldownMs": {
+                      "description": "Cooldown between alerts in ms",
+                      "type": "number"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "announce",
+                        "webhook"
+                      ]
+                    },
+                    "accountId": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": true,
+                  "description": "Failure alert config object, or the boolean value false to disable alerts for this job"
+                }
+              }
+            },
+            "jobId": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "patch": {
+              "additionalProperties": true,
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Job name",
+                  "type": "string"
+                },
+                "schedule": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "at",
+                        "every",
+                        "cron"
+                      ],
+                      "description": "Schedule type"
+                    },
+                    "at": {
+                      "description": "ISO-8601 timestamp (kind=at)",
+                      "type": "string"
+                    },
+                    "everyMs": {
+                      "description": "Interval in milliseconds (kind=every)",
+                      "type": "number"
+                    },
+                    "anchorMs": {
+                      "description": "Optional start anchor in milliseconds (kind=every)",
+                      "type": "number"
+                    },
+                    "expr": {
+                      "description": "Cron expression (kind=cron)",
+                      "type": "string"
+                    },
+                    "tz": {
+                      "description": "IANA timezone (kind=cron)",
+                      "type": "string"
+                    },
+                    "staggerMs": {
+                      "description": "Random jitter in ms (kind=cron)",
+                      "type": "number"
+                    }
+                  }
+                },
+                "sessionTarget": {
+                  "description": "Session target",
+                  "type": "string"
+                },
+                "wakeMode": {
+                  "type": "string",
+                  "enum": [
+                    "now",
+                    "next-heartbeat"
+                  ]
+                },
+                "payload": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "systemEvent",
+                        "agentTurn"
+                      ],
+                      "description": "Payload type"
+                    },
+                    "text": {
+                      "description": "Message text (kind=systemEvent)",
+                      "type": "string"
+                    },
+                    "message": {
+                      "description": "Agent prompt (kind=agentTurn)",
+                      "type": "string"
+                    },
+                    "model": {
+                      "description": "Model override",
+                      "type": "string"
+                    },
+                    "thinking": {
+                      "description": "Thinking level override",
+                      "type": "string"
+                    },
+                    "timeoutSeconds": {
+                      "type": "number"
+                    },
+                    "lightContext": {
+                      "type": "boolean"
+                    },
+                    "allowUnsafeExternalContent": {
+                      "type": "boolean"
+                    },
+                    "fallbacks": {
+                      "description": "Fallback model ids",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "toolsAllow": {
+                      "description": "Allowed tool ids, or null to clear",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "delivery": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "announce",
+                        "webhook"
+                      ],
+                      "description": "Delivery mode"
+                    },
+                    "channel": {
+                      "description": "Delivery channel",
+                      "type": "string"
+                    },
+                    "to": {
+                      "description": "Delivery target",
+                      "type": "string"
+                    },
+                    "bestEffort": {
+                      "type": "boolean"
+                    },
+                    "accountId": {
+                      "description": "Account target for delivery",
+                      "type": "string"
+                    },
+                    "failureDestination": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "properties": {
+                        "channel": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "accountId": {
+                          "type": "string"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "announce",
+                            "webhook"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "deleteAfterRun": {
+                  "type": "boolean"
+                },
+                "agentId": {
+                  "description": "Agent id, or null to clear it",
+                  "type": "string"
+                },
+                "sessionKey": {
+                  "description": "Explicit session key, or null to clear it",
+                  "type": "string"
+                },
+                "failureAlert": {
+                  "type": "object",
+                  "properties": {
+                    "after": {
+                      "description": "Failures before alerting",
+                      "type": "number"
+                    },
+                    "channel": {
+                      "description": "Alert channel",
+                      "type": "string"
+                    },
+                    "to": {
+                      "description": "Alert target",
+                      "type": "string"
+                    },
+                    "cooldownMs": {
+                      "description": "Cooldown between alerts in ms",
+                      "type": "number"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "announce",
+                        "webhook"
+                      ]
+                    },
+                    "accountId": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": true,
+                  "description": "Failure alert config object, or the boolean value false to disable alerts for this job"
+                }
+              }
+            },
+            "text": {
+              "type": "string"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "now",
+                "next-heartbeat"
+              ]
+            },
+            "runMode": {
+              "type": "string",
+              "enum": [
+                "due",
+                "force"
+              ]
+            },
+            "contextMessages": {
+              "minimum": 0,
+              "maximum": 10,
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "sessions_list",
+        "description": "List visible sessions with optional filters for kind, recent activity, and last messages. Use this to discover a target session before calling sessions_history or sessions_send.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "kinds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "limit": {
+              "minimum": 1,
+              "type": "number"
+            },
+            "activeMinutes": {
+              "minimum": 1,
+              "type": "number"
+            },
+            "messageLimit": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "sessions_history",
+        "description": "Fetch sanitized message history for a visible session. Supports limits and optional tool messages; use this to inspect another session before replying, debugging, or resuming work.",
+        "parameters": {
+          "type": "object",
+          "required": [
+            "sessionKey"
+          ],
+          "properties": {
+            "sessionKey": {
+              "type": "string"
+            },
+            "limit": {
+              "minimum": 1,
+              "type": "number"
+            },
+            "includeTools": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "sessions_send",
+        "description": "Send a message into another visible session by sessionKey or label. Use this to delegate follow-up work to an existing session; waits for the target run and returns the updated assistant reply when available.",
+        "parameters": {
+          "type": "object",
+          "required": [
+            "message"
+          ],
+          "properties": {
+            "sessionKey": {
+              "type": "string"
+            },
+            "label": {
+              "minLength": 1,
+              "maxLength": 512,
+              "type": "string"
+            },
+            "agentId": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "timeoutSeconds": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "sessions_yield",
+        "description": "End your current turn. Use after spawning subagents to receive their results as the next message.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "sessions_spawn",
+        "description": "Spawn an isolated session with `runtime=\"subagent\"` or `runtime=\"acp\"`. `mode=\"run\"` is one-shot and `mode=\"session\"` is persistent or thread-bound. Subagents inherit the parent workspace directory automatically. Use this when the work should happen in a fresh child session instead of the current one.",
+        "parameters": {
+          "type": "object",
+          "required": [
+            "task"
+          ],
+          "properties": {
+            "task": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "runtime": {
+              "type": "string",
+              "enum": [
+                "subagent",
+                "acp"
+              ]
+            },
+            "agentId": {
+              "type": "string"
+            },
+            "resumeSessionId": {
+              "description": "Resume an existing agent session by its ID (e.g. a Codex session UUID from ~/.codex/sessions/). Requires runtime=\"acp\". The agent replays conversation history via session/load instead of starting fresh.",
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "thinking": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "runTimeoutSeconds": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "timeoutSeconds": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "thread": {
+              "type": "boolean"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "run",
+                "session"
+              ]
+            },
+            "cleanup": {
+              "type": "string",
+              "enum": [
+                "delete",
+                "keep"
+              ]
+            },
+            "sandbox": {
+              "type": "string",
+              "enum": [
+                "inherit",
+                "require"
+              ]
+            },
+            "streamTo": {
+              "type": "string",
+              "enum": [
+                "parent"
+              ]
+            },
+            "lightContext": {
+              "description": "When true, spawned subagent runs use lightweight bootstrap context. Only applies to runtime='subagent'.",
+              "type": "boolean"
+            },
+            "attachments": {
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "content"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "encoding": {
+                    "type": "string",
+                    "enum": [
+                      "utf8",
+                      "base64"
+                    ]
+                  },
+                  "mimeType": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "attachAs": {
+              "type": "object",
+              "properties": {
+                "mountPath": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "subagents",
+        "description": "List, kill, or steer spawned sub-agents for this requester session. Use this for sub-agent orchestration.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "list",
+                "kill",
+                "steer"
+              ]
+            },
+            "target": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "recentMinutes": {
+              "minimum": 1,
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "session_status",
+        "description": "Show a /status-equivalent session status card for the current or another visible session, including usage, time, cost when available, and linked background task context. Optional `model` sets a per-session model override; `model=default` resets overrides. Use this for questions like what model is active or how a session is configured.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "sessionKey": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "web_fetch",
+        "description": "Fetch and extract readable content from a URL (HTML \u00e2\u0086\u0092 markdown/text). Use for lightweight page access without browser automation.",
+        "parameters": {
+          "type": "object",
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "description": "HTTP or HTTPS URL to fetch.",
+              "type": "string"
+            },
+            "extractMode": {
+              "type": "string",
+              "enum": [
+                "markdown",
+                "text"
+              ],
+              "description": "Extraction mode (\"markdown\" or \"text\").",
+              "default": "markdown"
+            },
+            "maxChars": {
+              "description": "Maximum characters to return (truncates when exceeded).",
+              "minimum": 100,
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "memory_search",
+        "description": "Mandatory recall step: semantically search MEMORY.md + memory/*.md (and optional session transcripts) before answering questions about prior work, decisions, dates, people, preferences, or todos. Optional `corpus=wiki` or `corpus=all` also searches registered compiled-wiki supplements. If response has disabled=true, memory retrieval is unavailable and should be surfaced to the user.",
+        "parameters": {
+          "type": "object",
+          "required": [
+            "query"
+          ],
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "maxResults": {
+              "type": "number"
+            },
+            "minScore": {
+              "type": "number"
+            },
+            "corpus": {
+              "anyOf": [
+                {
+                  "const": "memory",
+                  "type": "string"
+                },
+                {
+                  "const": "wiki",
+                  "type": "string"
+                },
+                {
+                  "const": "all",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "memory_get",
+        "description": "Safe exact excerpt read from MEMORY.md or memory/*.md. Defaults to a bounded excerpt when lines are omitted, includes truncation/continuation info when more content exists, and `corpus=wiki` reads from registered compiled-wiki supplements.",
+        "parameters": {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "from": {
+              "type": "number"
+            },
+            "lines": {
+              "type": "number"
+            },
+            "corpus": {
+              "anyOf": [
+                {
+                  "const": "memory",
+                  "type": "string"
+                },
+                {
+                  "const": "wiki",
+                  "type": "string"
+                },
+                {
+                  "const": "all",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "messages_count": 2,
+  "message_roles": [
+    "system",
+    "user"
+  ],
+  "system_prompt_chars": 27403
+}

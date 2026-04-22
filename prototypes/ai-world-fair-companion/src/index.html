@@ -1,0 +1,129 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI World Fair Companion</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <h1>AI World Fair</h1>
+        <button class="theme-toggle" onclick="Palette.toggleTheme()">Theme</button>
+    </header>
+
+    <main id="app-main">
+        <nav class="nav-bar">
+            <a href="schedule" class="nav-link active">Schedule</a>
+            <a href="expo" class="nav-link">Expo</a>
+            <a href="badge" class="nav-link">My Badge</a>
+            <a href="contacts" class="nav-link">Contacts</a>
+        </nav>
+
+        <div id="schedule" class="view active">
+            <h2>Event Schedule</h2>
+            <div class="filter-bar">
+                <span class="filter-label">Day:</span>
+                <button class="day-filter active" data-day="0">All</button>
+                <button class="day-filter" data-day="1">Day 1</button>
+                <button class="day-filter" data-day="2">Day 2</button>
+            </div>
+            <div class="filter-bar">
+                <span class="filter-label">Track:</span>
+                <button class="track-filter active" data-track="all">All</button>
+                <button class="track-filter" data-track="Track 1">Track 1</button>
+                <button class="track-filter" data-track="Track 2">Track 2</button>
+                <button class="track-filter" data-track="Demo Zone">Demo Zone</button>
+            </div>
+            <div class="search-bar">
+                <input type="text" id="schedule-search" placeholder="Search events...">
+            </div>
+            <div class="schedule-list"></div>
+        </div>
+
+        <div id="expo" class="view">
+            <h2>Exhibition Hall</h2>
+            <div class="filter-bar">
+                <span class="filter-label">Category:</span>
+                <button class="expo-category active" data-category="all">All</button>
+                <button class="expo-category" data-category="Healthcare">Healthcare</button>
+                <button class="expo-category" data-category="Education">Education</button>
+                <button class="expo-category" data-category="Finance">Finance</button>
+                <button class="expo-category" data-category="Manufacturing">Manufacturing</button>
+            </div>
+            <div class="search-bar">
+                <input type="text" id="expo-search" placeholder="Search exhibitors...">
+            </div>
+            <div class="expo-list"></div>
+        </div>
+
+        <div id="badge" class="view">
+            <h2>My Badge</h2>
+            <div class="badge-container">
+                <div class="badge-card">
+                    <span class="badge-id">ID: <span id="badge-id"></span></span>
+                    <h3 id="badge-name"></h3>
+                    <p class="badge-subtitle" id="badge-company"></p>
+                    <p class="badge-subtitle" id="badge-role"></p>
+                    <p class="badge-subtitle" id="badge-email"></p>
+                    <div id="qr-code"></div>
+                    <button id="share-badge" class="btn btn-primary">Share</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="contacts" class="view">
+            <h2>Attendees</h2>
+            <div class="filter-bar">
+                <span class="filter-label">Category:</span>
+                <button class="contact-category active" data-category="all">All</button>
+                <button class="contact-category" data-category="Technology">Technology</button>
+                <button class="contact-category" data-category="Healthcare">Healthcare</button>
+                <button class="contact-category" data-category="Finance">Finance</button>
+                <button class="contact-category" data-category="Education">Education</button>
+            </div>
+            <div class="action-bar">
+                <button id="scan-contact" class="btn btn-secondary">Scan QR</button>
+                <button id="add-contact" class="btn btn-primary">Add Contact</button>
+            </div>
+            <div class="search-bar">
+                <input type="text" id="contacts-search" placeholder="Search contacts...">
+            </div>
+            <div class="contacts-list"></div>
+        </div>
+    </main>
+
+    <div id="connection-status" class="status-bar"></div>
+
+    <div id="booth-modal" class="modal" onclick="if(event.target === this) Expo.closeModal();">
+        <div class="modal-content">
+            <span class="modal-close" onclick="Expo.closeModal()">&times;</span>
+            <div class="modal-body"></div>
+        </div>
+    </div>
+
+    <div id="contact-modal" class="modal" onclick="if(event.target === this) Contacts.closeModal();">
+        <div class="modal-content">
+            <span class="modal-close" onclick="Contacts.closeModal()">&times;</span>
+            <div class="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="vendor/qrcode.min.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/palette.js"></script>
+    <script src="js/schedule.js"></script>
+    <script src="js/expo.js"></script>
+    <script src="js/badge.js"></script>
+    <script src="js/contacts.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            Palette.applyColorTheme();
+            app.init();
+            Schedule.init();
+            Expo.init();
+            Badge.init();
+            Contacts.init();
+        });
+    </script>
+</body>
+</html>

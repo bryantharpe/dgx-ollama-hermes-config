@@ -1,0 +1,17 @@
+services:
+  openclaw-gateway:
+    container_name: openclaw-gateway
+    networks:
+      - default
+      - hermes
+  openclaw-cli:
+    container_name: openclaw-cli
+    # network_mode: service:openclaw-gateway in base compose means
+    # cli already shares hermes network via gateway.
+
+networks:
+  default:
+    name: openclaw-spike_default
+  hermes:
+    external: true
+    name: hermes-config_default

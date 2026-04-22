@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    image: ${PROTOTYPE_NAME:-prototype}:latest
+    container_name: ${PROTOTYPE_NAME:-prototype}
+    restart: unless-stopped
+    ports:
+      - "${PROTOTYPE_PORT:-9000}:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1

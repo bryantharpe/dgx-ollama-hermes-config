@@ -1,0 +1,60 @@
+/* Prototype stylesheet. Append feature-specific rules below.
+   The utilities at the top are load-bearing — don't remove them. */
+
+/* ── theme tokens ───────────────────────────────────────────────────────── */
+:root {
+    --bg: #0d1117;
+    --fg: #c9d1d9;
+    --fg-dim: #8b949e;
+    --accent: #58a6ff;
+    --accent-light: #7ee787;
+    --ok: #3fb950;
+    --err: #f85149;
+    --border: #30363d;
+    --panel: #161b22;
+}
+
+/* ── base ───────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    background: var(--bg);
+    color: var(--fg);
+    padding: 2rem;
+}
+
+h1 { color: var(--accent); }
+
+button {
+    font: inherit;
+    color: inherit;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+
+input, textarea {
+    font: inherit;
+    color: inherit;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 0.5rem;
+    border-radius: 6px;
+    width: 100%;
+}
+
+/* ── utilities ──────────────────────────────────────────────────────────── */
+.ok { color: var(--ok); }
+.err { color: var(--err); }
+
+/* `.hidden` must win over any element-level positioning (fixed overlays,
+   modal backdrops, etc.) — hence !important. The build-phase coder must
+   NOT invent alternative "hidden" classes or remove this rule. */
+.hidden { display: none !important; }
+
+/* ── feature styles: append below ───────────────────────────────────────── */

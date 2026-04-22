@@ -1,0 +1,22 @@
+# FROM is a local path because bartowski's Q5_K_M is sharded; Ollama 0.x
+# can't ingest sharded GGUFs directly, so scripts/ollama-pull-sharded-gguf.sh
+# downloads the shards, merges via llama-gguf-split, and docker-cp's the
+# merged blob into /tmp/merged.gguf inside the ollama container before
+# running `ollama create` against this Modelfile.
+FROM /root/.ollama/models/blobs/sha256-80d88823f4379fc9ef69a2fefbece60627999b079b72258618568b10f3ee9c75
+
+TEMPLATE {{ .Prompt }}
+RENDERER qwen3-coder
+PARSER qwen3-coder
+
+PARAMETER stop <|im_start|>
+PARAMETER stop <|im_end|>
+PARAMETER stop <|endoftext|>
+
+PARAMETER num_ctx 131072
+PARAMETER num_thread 12
+PARAMETER temperature 0.1
+PARAMETER top_p 0.95
+PARAMETER top_k 20
+
+SYSTEM "You are a helpful coding assistant."

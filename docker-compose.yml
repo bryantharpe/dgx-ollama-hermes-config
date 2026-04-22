@@ -1,0 +1,173 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - OLLAMA_MAX_VRAM=128G
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_CONTEXT_LENGTH=131072
+      - OLLAMA_ORIGINS=*
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: always
+
+  hermes-agent:
+    build: ./hermes-agent
+    image: hermes-agent:latest
+    container_name: hermes-agent
+    ports:
+      - "127.0.0.1:8642:8642"
+    volumes:
+      - ~/.hermes:/opt/data
+      - ./hermes-agent/skills:/opt/hermes/skills
+      - ./prototype-specs:/home/admin/code/hermes-config/prototype-specs
+      - ./prototypes:/home/admin/code/hermes-config/prototypes
+    extra_hosts:
+      - "ha.internal:192.168.10.151"
+    environment:
+      - API_SERVER_ENABLED=true
+      - API_SERVER_KEY=${HERMES_API_KEY}
+      - API_SERVER_HOST=0.0.0.0
+      - HERMES_INFERENCE_PROVIDER=custom
+      - OPENAI_API_BASE_URL=http://ollama:11434/v1
+      - OPENAI_API_KEY=none
+      - LLM_MODEL=qwen3.6-35b:128k
+      - OPENCODE_URL=http://opencode:4096
+      - OPENCODE_USERNAME=opencode
+      - OPENCODE_PASSWORD=${OPENCODE_PASSWORD}
+      - HERMES_PROTOTYPES_DIR=/home/admin/code/hermes-config/prototypes
+      - GATEWAY_ALLOW_ALL_USERS=true
+      - HASS_URL=${HOME_ASSISTANT_URL}
+      - HASS_TOKEN=${HOME_ASSISTANT_TOKEN}
+      - HERMES_AGENT_TIMEOUT=600
+      - HERMES_STREAM_READ_TIMEOUT=600
+      - HOME_ASSISTANT_URL=${HOME_ASSISTANT_URL}
+      - HOME_ASSISTANT_TOKEN=${HOME_ASSISTANT_TOKEN}
+      - SEEDER_URL=http://prototype-seeder:8080
+    command: gateway
+    cap_drop:
+      - DAC_OVERRIDE
+    depends_on:
+      - ollama
+      - prototype-seeder
+    restart: always
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      - "8080:8080"
+    volumes:
+      - open-webui_data:/app/backend/data
+    environment:
+      - OPENAI_API_BASE_URL=http://hermes-agent:8642/v1
+      - OPENAI_API_KEY=${HERMES_API_KEY}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - HTTPX_TIMEOUT=600
+    depends_on:
+      - hermes-agent
+    restart: always
+
+  vault:
+    image: hashicorp/vault
+    container_name: vault
+    ports:
+      - "127.0.0.1:8200:8200"
+    cap_add:
+      - IPC_LOCK
+    environment:
+      - VAULT_DEV_ROOT_TOKEN_ID=root
+    networks:
+      - default
+    restart: always
+
+  opencode:
+    build: ./opencode
+    image: opencode:latest
+    container_name: opencode
+    ports:
+      - "127.0.0.1:4096:4096"
+    volumes:
+      - ./prototype-specs:/specs:ro
+      - ./prototypes:/prototypes
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - OPENCODE_SERVER_PASSWORD=${OPENCODE_PASSWORD}
+      - OPENCODE_SERVER_USERNAME=opencode
+      - SEEDER_URL=http://prototype-seeder:8080
+    cap_drop:
+      - DAC_OVERRIDE
+    depends_on:
+      - ollama
+      - prototype-seeder
+    restart: always
+
+  prototype-seeder:
+    build: ./prototype-seeder
+    image: prototype-seeder:latest
+    container_name: prototype-seeder
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - ./prototypes:/prototypes
+    restart: always
+
+  netdata:
+    image: netdata/netdata:latest
+    container_name: netdata
+    hostname: hermes-dgx
+    ports:
+      - "19999:19999"
+    cap_add:
+      - SYS_PTRACE
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - DOCKER_HOST=/var/run/docker.sock
+    volumes:
+      - netdata_config:/etc/netdata
+      - netdata_lib:/var/lib/netdata
+      - netdata_cache:/var/cache/netdata
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/os-release:/host/etc/os-release:ro
+      - /var/log:/host/var/log:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility]
+    restart: always
+
+volumes:
+  ollama_data:
+  hermes_data:
+  open-webui_data:
+  netdata_config:
+  netdata_lib:
+  netdata_cache:

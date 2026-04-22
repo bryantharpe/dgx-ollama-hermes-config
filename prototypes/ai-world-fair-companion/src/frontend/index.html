@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<!-- AI Engineer World's Fair Companion
+  Dark terminal theme frontend with command palette.
+  URL structure (flat /static mount):
+    /static/style.css       -> src/frontend/style.css
+    /static/app.js          -> src/frontend/app.js
+    /static/palette.js      -> src/frontend/palette.js
+    /static/schedule.js     -> src/frontend/schedule.js
+    /static/expo.js         -> src/frontend/expo.js
+    /static/badge.js        -> src/frontend/badge.js
+    /static/contacts.js     -> src/frontend/contacts.js
+    /static/expo-map.svg    -> src/frontend/expo-map.svg
+    /static/vendor/*.js     -> src/frontend/vendor/*.js
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI World's Fair Companion</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>🤖 AI World's Fair</h1>
+        <nav>
+            <a class="nav-link" data-route="schedule">📅 Schedule</a>
+            <a class="nav-link" data-route="expo">🏢 Expo</a>
+            <a class="nav-link" data-route="badge">🎟️ Badge</a>
+            <a class="nav-link" data-route="contacts">👥 Contacts</a>
+        </nav>
+        <button id="search-toggle" title="Search (Cmd+K)">🔍</button>
+    </header>
+
+    <main id="app">
+        <!-- Command Palette (hidden by default) -->
+        <div id="palette" role="dialog" aria-modal="true">
+            <input type="text" id="palette-input" placeholder="Search talks, speakers, tags..." autocomplete="off">
+            <div id="palette-results"></div>
+            <div class="palette-hint">Press <kbd>Esc</kbd> to close</div>
+        </div>
+
+        <!-- Schedule View -->
+        <section id="schedule" class="view-section active">
+            <div class="view-header">
+                <h2>Talk Schedule</h2>
+                <div class="filters">
+                    <div class="filter-group">
+                        <span class="filter-label">Track:</span>
+                        <select id="track-filter" class="filter-select">
+                            <option value="">All Tracks</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <span class="filter-label">Speaker:</span>
+                        <input type="text" id="speaker-filter" class="filter-input" placeholder="Filter by speaker...">
+                    </div>
+                    <div class="filter-group">
+                        <span class="filter-label">Date:</span>
+                        <select id="date-filter" class="filter-select">
+                            <option value="">All Dates</option>
+                        </select>
+                    </div>
+                    <div class="filter-group" id="tag-chips">
+                        <span class="filter-label">Tags:</span>
+                    </div>
+                </div>
+            </div>
+            <div id="schedule-list" class="table-container">
+                <table id="schedule-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Room</th>
+                            <th>Talk</th>
+                            <th>Speaker</th>
+                            <th>Tags</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Expo View -->
+        <section id="expo" class="view-section">
+            <div class="view-header">
+                <h2>Expo Map</h2>
+                <button id="route-btn" class="delete-btn" style="border-color: var(--accent); color: var(--accent);">🗺️ Calculate Route</button>
+            </div>
+            <div id="expo-map-container" class="expo-map-container">
+                <svg id="expo-map" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <marker id="route-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                            <path d="M 0 0 L 6 3 L 0 6 Z" fill="#bc8cff"/>
+                        </marker>
+                    </defs>
+                    <!-- Map background and paths -->
+                    <rect x="0" y="0" width="100" height="100" fill="#161b22" stroke="#30363d" stroke-width="0.5"/>
+                    <path d="M 20 0 L 20 100" stroke="#30363d" stroke-width="0.5"/>
+                    <path d="M 40 0 L 40 100" stroke="#30363d" stroke-width="0.5"/>
+                    <path d="M 60 0 L 60 100" stroke="#30363d" stroke-width="0.5"/>
+                    <path d="M 80 0 L 80 100" stroke="#30363d" stroke-width="0.5"/>
+                    <path d="M 0 20 L 100 20" stroke="#30363d" stroke-width="0.5"/>
+                    <path d="M 0 40 L 100 40" stroke="#30363d" stroke-width="0.5"/>
+                    <path d="M 0 60 L 100 60" stroke="#30363d" stroke-width="0.5"/>
+                    <path d="M 0 80 L 100 80" stroke="#30363d" stroke-width="0.5"/>
+                </svg>
+                <div id="booth-labels"></div>
+            </div>
+            <div id="route-status" style="margin-top: 16px; color: var(--cyan);"></div>
+        </section>
+
+        <!-- Badge View -->
+        <section id="badge" class="view-section">
+            <div class="view-header">
+                <h2>Your Digital Badge</h2>
+                <button id="toggle-scan" class="delete-btn">📷 Scan QR</button>
+            </div>
+            <div class="badge-card">
+                <h3>Attendant Badge</h3>
+                <div class="badge-info">
+                    <div><span class="badge-label">Name:</span> <span id="badge-name" class="badge-value">Attendee</span></div>
+                    <div><span class="badge-label">GitHub:</span> <span id="badge-github" class="badge-value">attendee</span></div>
+                    <div><span class="badge-label">Project:</span> <span id="badge-project" class="badge-value">AI Engineer</span></div>
+                </div>
+                <div id="qr-code">
+                    <canvas id="qr-canvas"></canvas>
+                </div>
+            </div>
+            <div id="scan-section" class="scan-area" style="display: none;">
+                <h3>Scan Attendee Badge</h3>
+                <p class="scan-instructions">Point your camera at the QR code</p>
+                <video id="camera-feed" autoplay playsinline></video>
+                <div id="scan-result" class="terminal-box" style="margin-top: 16px; display: none;">
+                    <strong>Scanned:</strong> <span id="scan-data"></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Contacts View -->
+        <section id="contacts" class="view-section">
+            <div class="view-header">
+                <h2>Scanned Contacts</h2>
+                <span id="contact-count" style="color: var(--cyan);"></span>
+            </div>
+            <div id="contacts-list"></div>
+        </section>
+
+        <!-- Talk Detail Modal -->
+        <div id="talk-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modal-title"></h3>
+                    <button class="close-btn" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body" id="modal-body"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/vendor/qrcode.min.js"></script>
+    <script src="/static/app.js"></script>
+    <script src="/static/palette.js"></script>
+    <script src="/static/schedule.js"></script>
+    <script src="/static/expo.js"></script>
+    <script src="/static/badge.js"></script>
+    <script src="/static/contacts.js"></script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+# Secrets & local config — NEVER commit
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+credentials.json
+
+# Generated/cached hashes
+*.hash
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs & temp
+*.log
+logs/
+tmp/
+*.tmp
+*.bak
+*.bak.*
+
+# Local agent/tool runtime caches (keep shared config)
+.claude/cache/
+.claude/logs/
+.plandex-dev-v2/cache/
+
+# Local-only snapshot/backup directories (host-side, not source)
+backups/
+
+# Build artifacts and large binaries (use releases/external storage instead)
+*.tar.gz
+*.tar.zst
+*.img
+*.iso
+
+# Scratch / throwaway
+plandex-test/
+clipboard-*.png
+chat-export-*.json
+
+# Third-party upstream clone with local venv/runtime state; add as submodule later
+hermes-agent/
+
+# Nested upstream clones and runtime data from the openclaw spike
+openclaw-spike/openclaw/
+openclaw-spike/data/
+
+# Accidental root-owned dir from container mount (empty of content)
+workspace/
+
+# Prototype harness runtime state (allocated ports, locks)
+prototypes/.registry/ports.json
+prototypes/.registry/.lock

@@ -1,0 +1,159 @@
+services:
+  openclaw-caddy:
+    image: caddy:2-alpine
+    container_name: openclaw-caddy
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:443:443"
+      - "0.0.0.0:80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - default
+    depends_on:
+      - openclaw-gateway
+
+  openclaw-gateway:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    container_name: openclaw-gateway
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY:-}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY:-}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE:-}
+      TZ: ${OPENCLAW_TZ:-UTC}
+      OPENCODE_URL: ${OPENCODE_URL:-http://opencode:4096}
+      OPENCODE_USERNAME: ${OPENCODE_USERNAME:-opencode}
+      OPENCODE_PASSWORD: ${OPENCODE_PASSWORD:-}
+      SEEDER_URL: ${SEEDER_URL:-http://prototype-seeder:8080}
+      PROTOTYPES_DIR: ${PROTOTYPES_DIR:-/home/node/prototypes}
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      - /home/admin/code/hermes-config/prototypes:/home/node/prototypes
+    ports:
+      - "127.0.0.1:${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "127.0.0.1:${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+      # Published here (not on openclaw-dashboard) because the dashboard
+      # shares this service's network namespace so its hardcoded
+      # http://127.0.0.1:18789 gateway probe resolves to the gateway.
+      - "0.0.0.0:9000:8080"
+    init: true
+    restart: unless-stopped
+    networks:
+      - default
+      - hermes
+    command:
+      [
+        "node",
+        "dist/index.js",
+        "gateway",
+        "--bind",
+        "${OPENCLAW_GATEWAY_BIND:-lan}",
+        "--port",
+        "18789",
+      ]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  openclaw-cli:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    container_name: openclaw-cli
+    network_mode: "service:openclaw-gateway"
+    cap_drop:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+      BROWSER: echo
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY:-}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY:-}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE:-}
+      TZ: ${OPENCLAW_TZ:-UTC}
+      OPENCODE_URL: ${OPENCODE_URL:-http://opencode:4096}
+      OPENCODE_USERNAME: ${OPENCODE_USERNAME:-opencode}
+      OPENCODE_PASSWORD: ${OPENCODE_PASSWORD:-}
+      SEEDER_URL: ${SEEDER_URL:-http://prototype-seeder:8080}
+      PROTOTYPES_DIR: ${PROTOTYPES_DIR:-/home/node/prototypes}
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      - /home/admin/code/hermes-config/prototypes:/home/node/prototypes
+    stdin_open: true
+    tty: true
+    init: true
+    entrypoint: ["node", "dist/index.js"]
+    depends_on:
+      - openclaw-gateway
+
+  # socat sidecar in the gateway's netns. Forwards 127.0.0.1:18791 →
+  # ollama:11434 so mudrii's dashboard (which hardcodes 127.0.0.1:<gatewayPort>
+  # for chat) can reach ollama's OpenAI-compat /v1/chat/completions. The
+  # OpenClaw gateway itself does not serve chat over HTTP.
+  openclaw-ollama-proxy:
+    image: alpine/socat
+    container_name: openclaw-ollama-proxy
+    network_mode: "service:openclaw-gateway"
+    restart: unless-stopped
+    command: ["TCP-LISTEN:18791,fork,reuseaddr", "TCP:ollama:11434"]
+    depends_on:
+      openclaw-gateway:
+        condition: service_healthy
+
+  # Mobile-friendly dashboard (github.com/mudrii/openclaw-dashboard).
+  # Exposed on 0.0.0.0:9000 → LAN reachable at http://192.168.10.80:9000.
+  # Shares openclaw-gateway's network namespace (same pattern as openclaw-cli)
+  # because the dashboard hardcodes http://127.0.0.1:18789 for gateway probes.
+  # Consequence: port publishing for 9000:8080 lives on openclaw-gateway above.
+  # Note: upstream image runs as UID 1001. Host's /home/admin/.openclaw is
+  # mode 700 owned by UID 1000, so mounting it would give the container no
+  # readable content. Dashboard runs standalone; openclaw-data panels will be
+  # empty until we bridge the UID gap (future work). AI chat is routed through
+  # openclaw-ollama-proxy (port 18791) → ollama:11434 since the gateway itself
+  # has no /v1/chat/completions endpoint.
+  openclaw-dashboard:
+    build:
+      context: ./dashboard
+    container_name: openclaw-dashboard
+    restart: unless-stopped
+    network_mode: "service:openclaw-gateway"
+    environment:
+      TZ: ${OPENCLAW_TZ:-UTC}
+    volumes:
+      - ./dashboard-config/config.json:/app/config.json:ro
+    depends_on:
+      openclaw-ollama-proxy:
+        condition: service_started
+      openclaw-gateway:
+        condition: service_healthy
+
+networks:
+  default:
+    name: openclaw_default
+  hermes:
+    external: true
+    name: hermes-config_default
+
+volumes:
+  caddy_data:
+  caddy_config:

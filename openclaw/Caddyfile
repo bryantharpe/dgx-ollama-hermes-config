@@ -1,0 +1,26 @@
+# TLS termination for openclaw-gateway.
+# Cert is issued by Caddy's built-in local CA (tls internal).
+
+# default_sni handles clients that omit SNI (some Chrome builds for IP
+# literals, older browsers, curl without --resolve). Fall back to the
+# LAN IP cert so the handshake completes.
+{
+  default_sni 192.168.10.80
+}
+
+192.168.10.80, localhost, 127.0.0.1 {
+  tls internal
+
+  # reverse_proxy handles WebSocket upgrades automatically.
+  reverse_proxy openclaw-gateway:18789
+
+  log {
+    output stdout
+    format console
+  }
+}
+
+# Auto-redirect http://... to https://... so phone typos still land correctly.
+http://192.168.10.80, http://localhost, http://127.0.0.1 {
+  redir https://{host}{uri} permanent
+}

@@ -1,0 +1,12 @@
+-- Prototype schema. Append CREATE TABLE statements per feature.
+--
+-- INVARIANT: every column named in seed.py's INSERTs must appear here.
+-- Adding a column to seed data? Add it to the CREATE TABLE too.
+-- Removing a column from schema? Remove it from seed INSERTs too.
+--
+-- Example:
+--   CREATE TABLE IF NOT EXISTS items (
+--       id INTEGER PRIMARY KEY AUTOINCREMENT,
+--       name TEXT NOT NULL,
+--       created_at TEXT DEFAULT CURRENT_TIMESTAMP
+--   );

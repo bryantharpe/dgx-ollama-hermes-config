@@ -1,0 +1,596 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-glow: rgba(88, 166, 255, 0.3);
+    --success: #2ea043;
+    --warning: #d29922;
+    --danger: #f85149;
+    --tag-llm: #ff7b72;
+    --tag-rag: #a6dcef;
+    --tag-mlops: #d2a8ff;
+    --tag-fine-tune: #7ee787;
+    --tag-security: #ff7b72;
+    --tag-devtools: #96c93d;
+    --font-mono: 'Fira Code', 'JetBrains Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    line-height: 1.6;
+    overflow-x: hidden;
+}
+
+#app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    background-color: var(--panel);
+    border-bottom: 1px solid var(--border);
+    gap: 1rem;
+}
+
+.title {
+    font-size: 1.25rem;
+    color: var(--accent);
+    white-space: nowrap;
+}
+
+.nav {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.nav-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.nav-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.nav-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+.cmd-btn {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cmd-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Views */
+.view {
+    flex: 1;
+    padding: 1.5rem;
+    overflow-y: auto;
+    display: none;
+}
+
+.view.active {
+    display: block;
+}
+
+.view-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+/* Day Tabs */
+.day-tabs {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.day-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.day-btn.active {
+    background: var(--panel);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+/* Tag Filters */
+.tag-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.tag-btn {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.tag-btn.active {
+    color: #fff;
+}
+
+.tag-llm { background-color: var(--tag-llm); }
+.tag-rag { background-color: var(--tag-rag); }
+.tag-mlops { background-color: var(--tag-mlops); }
+.tag-fine-tune { background-color: var(--tag-fine-tune); }
+.tag-security { background-color: var(--tag-security); }
+.tag-devtools { background-color: var(--tag-devtools); }
+
+/* Talks List */
+.talks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.talk-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    position: relative;
+}
+
+.talk-card:hover {
+    border-color: var(--accent);
+}
+
+.talk-card.collision {
+    border-color: var(--warning);
+    border-left: 3px solid var(--warning);
+}
+
+.talk-card.collision::after {
+    content: '⚠️';
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.talk-time {
+    color: var(--accent);
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.talk-title {
+    font-size: 1.1rem;
+    margin: 0.25rem 0;
+    color: var(--text);
+}
+
+.talk-speaker {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.talk-track {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin-right: 0.5rem;
+}
+
+.talk-tag {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin-right: 0.25rem;
+}
+
+/* Talk Detail */
+.talk-detail {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.talk-detail-content {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2rem;
+    max-width: 600px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.talk-detail-content h2 {
+    color: var(--accent);
+    margin-bottom: 1rem;
+}
+
+.close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 2rem;
+    cursor: pointer;
+    line-height: 1;
+}
+
+/* Expo Map */
+.expo-container {
+    width: 100%;
+    min-height: 600px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: auto;
+    padding: 2rem;
+}
+
+.expo-map {
+    width: 100%;
+    height: auto;
+}
+
+.expo-map circle.expo-booth {
+    stroke: var(--accent);
+    stroke-width: 2;
+    cursor: pointer;
+}
+
+.expo-map circle.expo-booth.pinned {
+    stroke: var(--warning);
+}
+
+.expo-map text.expo-label {
+    fill: var(--text);
+    font-size: 10px;
+}
+
+.expo-map polyline.route {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-dasharray: 5, 5;
+}
+
+.expo-entrance {
+    fill: var(--accent);
+}
+
+.expo-route-info {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.expo-route-info h3 {
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+}
+
+.expo-route-info ol {
+    margin-left: 1.5rem;
+}
+
+.expo-route-info li {
+    margin-bottom: 0.25rem;
+}
+
+/* QR Badge */
+.qr-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.badge-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: left;
+    width: 100%;
+}
+
+.badge-label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-top: 0.75rem;
+    display: block;
+}
+
+.badge-value {
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+}
+
+.qr-canvas {
+    margin: 1rem 0;
+    border: 1px solid var(--border);
+    background: #fff;
+}
+
+.qr-hint {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.camera-container {
+    position: relative;
+    width: 320px;
+    height: 240px;
+    border: 1px solid var(--border);
+}
+
+.camera-container video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Command Palette */
+.cmd-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.cmd-overlay.hidden {
+    display: none;
+}
+
+.cmd-input-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+}
+
+.cmd-input-wrapper input {
+    width: 100%;
+    background: var(--panel);
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    padding: 1rem 3rem 1rem 1rem;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    outline: none;
+    box-shadow: 0 0 20px var(--accent-glow);
+}
+
+.cmd-input-wrapper input::placeholder {
+    color: var(--text-muted);
+}
+
+.cmd-shortcut {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.cmd-results {
+    width: 100%;
+    max-width: 600px;
+    margin-top: 1rem;
+    background: var(--panel);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.cmd-result {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.cmd-result:hover {
+    background: rgba(88, 166, 255, 0.1);
+}
+
+.cmd-result-match {
+    color: var(--accent);
+    font-weight: bold;
+}
+
+.cmd-result-time {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.cmd-result-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+/* Contacts */
+.contacts-list {
+    display: flex {
+    gap: 1rem;
+}
+
+.contacts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.contact-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.contact-info {
+    flex: 1;
+}
+
+.contact-name {
+    color: var(--accent);
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.contact-github {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.contact-project {
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+}
+
+.contact-scan-time {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.btn-primary {
+    background: var(--success);
+    color: #fff;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 4px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+    }
+    
+    .nav {
+        order: 2;
+    }
+    
+    .cmd-btn {
+        order: 3;
+    }
+    
+    .view-header {
+        flex-direction: column;
+    }
+    
+    .day-tabs {
+        width: 100%;
+        overflow-x: auto;
+    }
+    
+    .talk-detail-content {
+        padding: 1rem;
+    }
+}
+
+/* Generic hidden utility — must come last to win specificity against
+   .cmd-overlay, .talk-detail, etc. with their own position:fixed rules. */
+.hidden {
+    display: none !important;
+}

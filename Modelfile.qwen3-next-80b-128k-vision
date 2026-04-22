@@ -1,0 +1,8 @@
+FROM hf.co/mradermacher/Qwen3-Next-80B-A3B-Thinking-GGUF:Q4_K_M
+PARAMETER num_ctx 131072
+PARAMETER num_thread 12
+PARAMETER temperature 1
+PARAMETER top_k 20
+PARAMETER top_p 0.95
+# Add vision capability flag so Ollama accepts metadata from WebUI
+ADAPTER vision

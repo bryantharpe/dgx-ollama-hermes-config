@@ -1,0 +1,8 @@
+{
+  "ai": {
+    "enabled": true,
+    "gatewayPort": 18791,
+    "model": "qwen3.6-35b:128k",
+    "maxHistory": 6
+  }
+}

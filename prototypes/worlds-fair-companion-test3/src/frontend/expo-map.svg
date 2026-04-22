@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet" class="expo-map-svg">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#30363d" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="500" fill="#0d1117"/>
+  <rect width="800" height="500" fill="url(#grid)"/>
+
+  <!-- Hall A -->
+  <g id="hall-a">
+    <rect x="40" y="40" width="340" height="420" fill="#161b22" stroke="#58a6ff" stroke-width="2" rx="6"/>
+    <text x="210" y="30" fill="#58a6ff" text-anchor="middle" font-family="monospace" font-size="16" font-weight="bold">HALL A</text>
+  </g>
+
+  <!-- Hall B -->
+  <g id="hall-b">
+    <rect x="420" y="40" width="340" height="420" fill="#161b22" stroke="#7ee787" stroke-width="2" rx="6"/>
+    <text x="590" y="30" fill="#7ee787" text-anchor="middle" font-family="monospace" font-size="16" font-weight="bold">HALL B</text>
+  </g>
+
+  <!-- Booth slots rendered dynamically by JS; grid provides layout reference -->
+</svg>
