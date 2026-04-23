@@ -1,10 +1,19 @@
 {
   "gateway": {
     "mode": "local",
+    "bind": "lan",
+    "port": 18789,
+    "trustedProxies": [
+      "172.23.0.0/16"
+    ],
     "controlUi": {
       "allowedOrigins": [
         "http://127.0.0.1:18789",
-        "http://localhost:18789"
+        "http://localhost:18789",
+        "http://192.168.10.80:18789",
+        "https://192.168.10.80",
+        "https://localhost",
+        "https://127.0.0.1"
       ]
     }
   },
@@ -16,13 +25,22 @@
         "api": "ollama",
         "models": [
           {
-            "id": "qwen3.6-35b:128k",
-            "name": "qwen3.6-35b:128k",
-            "reasoning": false,
+            "id": "hermes-orchestrator:qwen3.6-128k",
+            "name": "hermes-orchestrator:qwen3.6-128k",
+            "reasoning": true,
             "input": ["text"],
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
             "contextWindow": 128000,
-            "maxTokens": 8192
+            "maxTokens": 16384
+          },
+          {
+            "id": "qwen3.6-35b:128k",
+            "name": "qwen3.6-35b:128k",
+            "reasoning": true,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 128000,
+            "maxTokens": 16384
           }
         ]
       }
@@ -30,9 +48,70 @@
   },
   "agents": {
     "defaults": {
-      "model": { "primary": "ollama/qwen3.6-35b:128k" },
+      "model": {
+        "primary": "ollama/hermes-orchestrator:qwen3.6-128k"
+      },
       "llm": {
         "idleTimeoutSeconds": 300
+      }
+    }
+  },
+  "skills": {
+    "allowBundled": []
+  },
+  "tools": {
+    "exec": {
+      "security": "full",
+      "ask": "off"
+    },
+    "web": {
+      "search": {
+        "provider": "brave",
+        "maxResults": 5,
+        "timeoutSeconds": 30
+      }
+    }
+  },
+  "plugins": {
+    "slots": {
+      "memory": "memory-lancedb"
+    },
+    "entries": {
+      "memory-lancedb": {
+        "enabled": true,
+        "config": {
+          "embedding": {
+            "apiKey": "ollama",
+            "model": "nomic-embed-text",
+            "baseUrl": "http://ollama:11434/v1",
+            "dimensions": 768
+          },
+          "autoCapture": true,
+          "autoRecall": true,
+          "captureMaxChars": 500
+        }
+      },
+      "brave": {
+        "enabled": true
+      }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": false,
+      "dmPolicy": "pairing",
+      "botToken": "",
+      "groupPolicy": "allowlist",
+      "streaming": "partial"
+    }
+  },
+  "hooks": {
+    "internal": {
+      "enabled": true,
+      "entries": {
+        "session-memory-embed": {
+          "enabled": true
+        }
       }
     }
   }

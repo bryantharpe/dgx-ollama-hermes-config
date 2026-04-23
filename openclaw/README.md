@@ -27,6 +27,15 @@ cp openclaw.json ~/.openclaw/openclaw.json
 # Edit .env and set OPENCLAW_GATEWAY_TOKEN=...
 ```
 
+The tracked `openclaw.json` is a **sanitized snapshot of the live config**, not an auto-seeded source of truth. `docker compose up` never reads it — it's only used by the explicit `cp` above for a fresh first-run. Placeholders to fill in before or after copying:
+
+- `channels.telegram.botToken` — empty; set to the value from `@BotFather`.
+- `channels.telegram.enabled` — shipped as `false` so an empty bot token doesn't crash the plugin. Flip to `true` after the token is in.
+- `gateway.auth.token` — not present; the gateway auto-generates it on first boot (see "Open the Control UI" below).
+- `BRAVE_API_KEY` (in `.env`, not `openclaw.json`) — required for the `web_search` tool. Tracked config wires Brave as the provider (`tools.web.search.provider = "brave"` + `plugins.entries.brave.enabled = true`); the gateway reads the key from env. Get one at [brave.com/search/api](https://brave.com/search/api/) and set a usage cap in the Brave dashboard.
+
+If you edit the live config at `~/.openclaw/openclaw.json`, consider re-snapshotting the tracked template afterwards so it doesn't drift stale.
+
 Skills live under `~/.openclaw/skills/` and are picked up automatically via the bind-mount.
 
 ### Required config keys
@@ -90,5 +99,5 @@ docker compose down
 
 - `docker-compose.yml` — gateway + cli services, joined to `hermes-config_default`.
 - `.env.example` — env contract (image, paths, ports, timezone, token).
-- `openclaw.json` — tracked template of `~/.openclaw/openclaw.json` (Ollama provider + agent defaults).
+- `openclaw.json` — sanitized snapshot of `~/.openclaw/openclaw.json` (Ollama provider, agent defaults, memory-lancedb, telegram shape, session-memory-embed hook). Used for first-run copy only; never mounted.
 - `~/.openclaw/` (on host) — live state: config, skills, agents, credentials, workspace.
