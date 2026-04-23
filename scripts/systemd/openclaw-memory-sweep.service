@@ -1,0 +1,9 @@
+[Unit]
+Description=OpenClaw memory-lancedb full reconcile
+Documentation=file:///home/admin/code/hermes-config/scripts/openclaw-memory-sweep.sh
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/admin/code/hermes-config/scripts/openclaw-memory-sweep.sh
+Nice=10

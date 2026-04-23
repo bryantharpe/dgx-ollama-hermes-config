@@ -1,0 +1,13 @@
+[Unit]
+Description=Run openclaw-memory-sweep daily as a safety net
+Documentation=file:///home/admin/code/hermes-config/scripts/openclaw-memory-sweep.sh
+
+[Timer]
+OnBootSec=5min
+OnCalendar=*-*-* 03:15:00
+RandomizedDelaySec=10min
+Persistent=true
+Unit=openclaw-memory-sweep.service
+
+[Install]
+WantedBy=timers.target
