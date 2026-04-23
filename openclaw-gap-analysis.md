@@ -28,7 +28,7 @@
 > - **Secondary snapshot refresh:** while in the tracked `openclaw/openclaw.json`, also committed the previously-uncommitted live-config snapshot drift (trustedProxies, hermes-orchestrator model, memory-lancedb, telegram shape, session-memory-embed hook). Tracked snapshot now matches live again.
 > - **○ A5, B1, B2, B3, B5, B6, C1–C7 — not yet started.**
 >
-> Re-ranked ordering: **B2 → A5 → B1/B6 → B3/B5**. B2 (heartbeat payload) stays top — heartbeat's still burning tokens returning `HEARTBEAT_OK` on an empty template, and Telegram is live to deliver the output. A5 (cloud fallback) is second now that A6 is done (operator scope no longer a prerequisite). B1+B6 pair naturally: stand up vault for secrets first, then wire the first MCP server against it.
+> Re-ranked ordering: **B2 → B1 → B3 → B5 → (B6 optional)**. B2 (heartbeat payload) stays top — heartbeat's still burning tokens returning `HEARTBEAT_OK` on an empty template, and Telegram is live to deliver the output. **A5 (cloud fallback) is deferred indefinitely** — 2026-04-23 decision to keep OpenClaw fully local; Qwen3.6 tool-call brittleness will be addressed via local means (model swap, tighter skill design) rather than cloud escalation. B6 (vault) was the A5 ride-along and loses its top-line urgency; it drops to optional-hygiene for bot tokens / MCP creds. B1 (first MCP server) moves up as the next utility lift after B2.
 >
 > **Appendix deltas:** *Paired devices:* 2 (not 3; down from earlier snapshot), scopes no longer uniform — one runtime at full `operator.*`, one UI at `read+write+approvals`. *`openclaw security audit`:* 0 critical / 0 warn. Everything else in the appendix is still accurate as of 2026-04-23.
 
@@ -234,15 +234,21 @@ Net: consent plumbing exists, but as configured it's coarse-grained and permissi
 
 ## Next 3 concrete actions
 
-> **Update 2026-04-23:** A6 and B4 both shipped — see 2026-04-23 status block at top. New next 3:
+> **Update 2026-04-23 (late):** A5 deferred indefinitely — 2026-04-23 decision to keep OpenClaw fully local, no cloud fallback. New next 3:
 >
 > 1. **Populate `HEARTBEAT.md` (B2) with 3–4 concrete rotating checks.** Highest-payoff/lowest-effort item now: heartbeats fire hourly and burn tokens returning `HEARTBEAT_OK` on an empty template. With Telegram live, a useful payload ("any unread 1:1 Telegram DMs? any calendar event in the next 30 min? weather for CT?") makes the channel feel alive. Add `memory/heartbeat-state.json` rate-limiting so the agent doesn't re-signal the same check every hour.
-> 2. **Wire a cloud fallback (A5) + vault for its key (B6 — ride-along).** Stand up `~/.openclaw/.env` reads from vault, add `anthropic` (or `openai`) to `models.providers` with a vault-issued key, then add a narrow routing rule ("on explicit `/escalate`, never heartbeat"). Mitigates the Qwen3.6 tool-call brittleness (57% failure in task logs). Scope gate now reliable thanks to A6.
-> 3. **First MCP server (B1) — start with the one you actually use daily.** Install `mcporter` (sidecar or npm-global in the gateway), add `mcporter` to `skills.allowBundled`, `mcporter auth <server>` for gmail or github or linear, add the server entry under the MCP config. Tokens go into vault alongside A5's fallback key.
+> 2. **First MCP server (B1) — start with the one you actually use daily.** Install `mcporter` (sidecar or npm-global in the gateway), add `mcporter` to `skills.allowBundled`, `mcporter auth <server>` for gmail or github or linear, add the server entry under the MCP config. Tokens go in an `~/.openclaw/.env` (mode 600) for now; promote to vault (B6) later if the credential surface grows.
+> 3. **Expand `skills.allowBundled` (B3) with the no-auth skills.** `summarize`, `session-logs`, `tmux`, `xurl`, `video-frames`, `mcporter` (after B1) — 8–12 names, all local, no new credentials. Broadens what Nemo can actually reach for without enlarging the attack surface meaningfully.
+
+**Deferred / dropped:**
+
+- **A5 — cloud fallback:** deferred indefinitely 2026-04-23. Keeping OpenClaw fully local; Qwen3.6 tool-call brittleness will be addressed via local-only mitigations (model swap within Ollama, tighter skill design) if it becomes a real blocker. The A5 row in the table below stands as historical context.
+- **B6 — vault:** was A5's ride-along; without A5 there are no cloud API keys to store, so B6 drops from urgent to optional hygiene for bot tokens / MCP creds. Revisit if the `.env` credential count grows uncomfortably.
 
 **Previous Next 3 (preserved):**
 
-- **2026-04-22 revision** was A6 (urgent) → B2 → A5. A6 ✅ done 2026-04-23; B2 and A5 carry forward.
+- **2026-04-23 morning:** B2 → A5+B6 → B1. Superseded same day by the local-only decision above.
+- **2026-04-22 revision:** A6 (urgent) → B2 → A5. A6 ✅ done 2026-04-23; B2 carries forward, A5 deferred.
 - **Original (2026-04-21):** A4 ✅ · A1 ✅ 2026-04-22 · A3 ✅ 2026-04-22.
 
 ---
