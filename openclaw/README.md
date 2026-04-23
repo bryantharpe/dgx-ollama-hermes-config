@@ -81,6 +81,22 @@ Then click Connect again in the browser — it's paired until you revoke it.
 
 The gateway's internal **runtime** also pairs as a separate device for tool execution (e.g. `exec`). If the agent reports "Exec approval registration failed: pairing required" in a tool result, run `devices list` again — you'll see a pending `repair` request asking to extend an existing paired device's scopes from `operator.read` to include `operator.write` + `operator.approvals`. Approve it the same way. This typically happens on first use of the `exec` tool after a container recreate.
 
+### Operator scopes — don't grant admin/pairing to chat clients
+
+New pairing requests (Control UI, phone, future Telegram-paired clients) default to asking for all five operator scopes: `operator.read`, `operator.write`, `operator.admin`, `operator.approvals`, `operator.pairing`. The last two are privileged (`admin` = `/config set|unset`; `pairing` = approve further device pairings). **Don't leave them on a chat client.**
+
+The current policy on this deployment:
+
+- **Gateway runtime device** (the internal CLI agent, `clientId: cli`) — full scopes; needs them to run `exec` and resolve approvals.
+- **Control UI / phone browser** (`clientId: openclaw-control-ui`) — reduced to `operator.read + operator.write + operator.approvals`. Config edits go through file edit + gateway restart, not `/config set`.
+- **Any new device** (esp. channel-paired) — approve, then immediately rotate down:
+  ```bash
+  docker compose run --rm openclaw-cli devices rotate \
+    --device <deviceId> --role operator \
+    --scope operator.read --scope operator.write --scope operator.approvals
+  ```
+  `devices rotate` only changes the **token** scopes; also edit `~/.openclaw/devices/paired.json` to reduce `scopes` and `approvedScopes` on that device entry, then `docker compose restart openclaw-gateway`, so a future re-pair doesn't reissue admin/pairing.
+
 ## Use the CLI
 
 ```bash

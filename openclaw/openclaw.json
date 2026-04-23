@@ -15,6 +15,13 @@
         "https://localhost",
         "https://127.0.0.1"
       ]
+    },
+    "auth": {
+      "rateLimit": {
+        "maxAttempts": 10,
+        "windowMs": 60000,
+        "lockoutMs": 300000
+      }
     }
   },
   "models": {
@@ -61,8 +68,9 @@
   },
   "tools": {
     "exec": {
-      "security": "full",
-      "ask": "off"
+      "security": "allowlist",
+      "ask": "on-miss",
+      "strictInlineEval": true
     },
     "web": {
       "search": {
