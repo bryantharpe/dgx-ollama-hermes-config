@@ -32,7 +32,15 @@
 >
 > **Appendix deltas:** *Paired devices:* 2 (not 3; down from earlier snapshot), scopes no longer uniform — one runtime at full `operator.*`, one UI at `read+write+approvals`. *`openclaw security audit`:* 0 critical / 0 warn. Everything else in the appendix is still accurate as of 2026-04-23.
 
----
+> ### Status update — 2026-04-24
+>
+> B2 shipped with a conservative posture:
+>
+> - **✅ B2 — heartbeat payload: DONE (silent).** Added `agents.defaults.heartbeat` to the live + tracked config: `every: "1h"`, `target: "none"`, `isolatedSession: true`, `lightContext: true`, `activeHours: 08:00–22:00`. So heartbeat fires hourly inside the active window, reads a small context, and produces nothing outbound (silent-until-summoned posture, by Bryan's explicit choice). Populated `~/.openclaw/workspace/HEARTBEAT.md` with a 3-item rotation keyed to what's actually reachable today: weather (CT, morning-only, 24h TTL), host healthcheck (24h TTL), and memory-follow-up scan via the memory-lancedb auto-injection (12h TTL). Seeded `workspace/memory/heartbeat-state.json` with null `lastChecks` so the agent rate-limits itself.
+> - **◐ B3 — allowBundled: PARTIAL.** Allowlisted `weather` + `healthcheck` (both `eligible=true`, zero credentials). Tried `session-logs` and `summarize` but those need binaries not in the gateway image (`jq`, `rg`, and a `summarize` CLI). Dropped them from the list rather than extending the image — revisit if a heartbeat check actually needs them.
+> - **○ B1, B5, B6 not yet started.** B1 (first MCP server) gated on Gmail-risk decision: leaning toward secondary-account + filtered forwarding + read-only scope rather than main-mailbox. Pending explicit decision before spending Google Cloud OAuth time. A5 remains deferred (fully local).
+>
+> **Re-ranked ordering after B2:** **B1 → B3 (remaining skills) → B5**. B1 unblocks real heartbeat payload (calendar/mail/PRs) — right now the rotation is rich on scaffolding but thin on data sources. Flipping `target` from `"none"` to `"telegram"` is a one-line config change whenever Bryan decides Nemo has earned the right to DM.
 
 ## Phase 1 — Current Setup Inventory
 

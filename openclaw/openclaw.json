@@ -35,8 +35,15 @@
             "id": "hermes-orchestrator:qwen3.6-128k",
             "name": "hermes-orchestrator:qwen3.6-128k",
             "reasoning": true,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 128000,
             "maxTokens": 16384
           },
@@ -44,8 +51,15 @@
             "id": "qwen3.6-35b:128k",
             "name": "qwen3.6-35b:128k",
             "reasoning": true,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 128000,
             "maxTokens": 16384
           }
@@ -60,11 +74,24 @@
       },
       "llm": {
         "idleTimeoutSeconds": 300
+      },
+      "heartbeat": {
+        "every": "1h",
+        "target": "none",
+        "isolatedSession": true,
+        "lightContext": true,
+        "activeHours": {
+          "start": "08:00",
+          "end": "22:00"
+        }
       }
     }
   },
   "skills": {
-    "allowBundled": []
+    "allowBundled": [
+      "weather",
+      "healthcheck"
+    ]
   },
   "tools": {
     "exec": {
