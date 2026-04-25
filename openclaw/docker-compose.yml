@@ -33,6 +33,9 @@ services:
       OPENCODE_PASSWORD: ${OPENCODE_PASSWORD:-}
       SEEDER_URL: ${SEEDER_URL:-http://prototype-seeder:8080}
       PROTOTYPES_DIR: ${PROTOTYPES_DIR:-/home/node/prototypes}
+      HINDSIGHT_API_URL: ${HINDSIGHT_API_URL:-}
+      HINDSIGHT_API_TENANT_API_KEY: ${HINDSIGHT_API_TENANT_API_KEY:-}
+      HINDSIGHT_BANK_ID: ${HINDSIGHT_BANK_ID:-bryan-default}
     volumes:
       - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
