@@ -1,0 +1,60 @@
+# Public-facing path filter for hindsight-bryan.fly.dev.
+# Fly's edge terminates TLS, so this listener is plain HTTP on :8888.
+# Hindsight runs alongside on :8889 (set in fly.toml [env]).
+
+{
+    admin off
+    persist_config off
+    log {
+        output stdout
+        format json
+    }
+}
+
+:8888 {
+    # `route` preserves directive order. Without it Caddy reorders `handle`
+    # blocks by specificity and the catch-all reverse_proxy can run first.
+    route {
+        # Block diagnostic endpoints. 404 (not 403) so existence isn't revealed.
+        # Caddy's `path` is exact-match — list both `/x` and `/x/*` for prefix.
+        @blocked path /metrics /metrics/* /docs /docs/* /openapi.json
+        handle @blocked {
+            respond 404
+        }
+
+        # Pass everything else through unchanged. reverse_proxy preserves all
+        # headers (Authorization included). No timeouts so MCP streaming
+        # responses stay open for as long as the client wants.
+        reverse_proxy 127.0.0.1:8889 {
+            transport http {
+                read_timeout 0
+                write_timeout 0
+            }
+        }
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}
+
+# Private listener for Fly 6PN access only. Not declared in fly.toml under
+# [http_service] / [[services]], so Fly's edge never forwards traffic here.
+# Only `fly proxy` (riding WireGuard to the machine's 6PN address) can reach
+# this port. Used to scrape /metrics without exposing it on the open internet.
+# Caddy binds dual-stack by default (:8890 → both IPv4 and IPv6), which is
+# what makes 6PN's IPv6-only routing work even though Hindsight is IPv4-only.
+:8890 {
+    reverse_proxy 127.0.0.1:8889 {
+        transport http {
+            read_timeout 0
+            write_timeout 0
+        }
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}

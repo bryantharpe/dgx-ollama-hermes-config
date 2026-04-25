@@ -1,0 +1,39 @@
+app = "hindsight-bryan"
+primary_region = "iad"
+
+[build]
+dockerfile = "Dockerfile"
+
+[env]
+HINDSIGHT_API_HOST = "0.0.0.0"
+HINDSIGHT_API_PORT = "8889"
+# start-all.sh probes this URL to know when the API is ready.
+# Must match HINDSIGHT_API_PORT or it will time out and kill the container.
+HINDSIGHT_API_HEALTH_URL = "http://localhost:8889/health"
+HINDSIGHT_API_LOG_FORMAT = "json"
+HINDSIGHT_API_MCP_ENABLED = "true"
+HINDSIGHT_API_VECTOR_EXTENSION = "pgvector"
+HINDSIGHT_API_TENANT_EXTENSION = "hindsight_api.extensions.builtin.tenant:ApiKeyTenantExtension"
+HINDSIGHT_API_LLM_PROVIDER = "openai"
+HINDSIGHT_API_LLM_BASE_URL = "https://api.cerebras.ai/v1"
+HINDSIGHT_API_LLM_MODEL = "qwen-3-235b-a22b-instruct-2507"
+
+[http_service]
+internal_port = 8888
+force_https = true
+auto_stop_machines = "suspend"
+auto_start_machines = true
+min_machines_running = 0
+
+  [[http_service.checks]]
+  # Caddy boots in ~50ms but proxies /health to Hindsight; Hindsight + pgvector
+  # + Neon connect needs ~10–25s, so 30s leaves no margin. 60s is cheap.
+  grace_period = "60s"
+  interval = "30s"
+  timeout = "5s"
+  method = "GET"
+  path = "/health"
+
+[[vm]]
+size = "shared-cpu-1x"
+memory = "2048mb"
