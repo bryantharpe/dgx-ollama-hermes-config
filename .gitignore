@@ -50,8 +50,7 @@ tmp/
 *.bak.*
 
 # Local agent/tool runtime caches (keep shared config)
-.claude/cache/
-.claude/logs/
+.claude/
 .plandex-dev-v2/cache/
 
 # Local-only snapshot/backup directories (host-side, not source)

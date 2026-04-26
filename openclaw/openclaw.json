@@ -26,10 +26,10 @@
   },
   "models": {
     "providers": {
-      "ollama": {
-        "apiKey": "ollama-local",
-        "baseUrl": "http://ollama:11434",
-        "api": "ollama",
+      "vllm": {
+        "apiKey": "vllm-local",
+        "baseUrl": "http://vllm:8000/v1",
+        "api": "openai-completions",
         "models": [
           {
             "id": "hermes-orchestrator:qwen3.6-128k",
@@ -70,7 +70,7 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "ollama/hermes-orchestrator:qwen3.6-128k"
+        "primary": "vllm/hermes-orchestrator:qwen3.6-128k"
       },
       "llm": {
         "idleTimeoutSeconds": 300
@@ -108,12 +108,10 @@
     }
   },
   "plugins": {
-    "slots": {
-      "memory": "memory-lancedb"
-    },
+    "slots": {},
     "entries": {
       "memory-lancedb": {
-        "enabled": true,
+        "enabled": false,
         "config": {
           "embedding": {
             "apiKey": "ollama",

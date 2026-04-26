@@ -23,16 +23,14 @@ graph TD
         %% Application Stack
         WebUI["🎨 Open WebUI<br/>(Frontend: 8080)"]
         Hermes["🤖 Hermes Agent<br/>(Agent Layer: 8642)"]
-        Ollama["🧠 Ollama<br/>(Inference: 11434)"]
+        VLLM["🧠 vLLM<br/>(Inference: 8000)<br/>Qwen3.6-35B-A3B-FP8"]
         Vault["🔑 HashiCorp Vault<br/>(Secrets: 8200)"]
-        Plandex["⚡ Plandex<br/>(Coding Agent: 3001)"]
 
         %% Persistent Storage
         subgraph "Volumes & State"
-            OllamaData[("💾 Ollama Models")]
+            HFCache[("💾 HF Cache")]
             HermesData[("💾 Agent Data")]
             WebUIData[("💾 WebUI Data")]
-            PlandexData[("💾 Plandex Data")]
         end
 
         %% External Egress
@@ -46,16 +44,16 @@ graph TD
         SSH --> WebUI
 
         %% Frontend connections
-        WebUI -- "OpenAI API" --> Hermes
-        WebUI -- "Ollama API" --> Ollama
+        WebUI -- "OpenAI /v1" --> Hermes
+        WebUI -- "OpenAI /v1" --> VLLM
 
         %% Agent logic flow
-        Hermes -- "Inference (qwen3.6-35b:128k)" --> Ollama
+        Hermes -- "OpenAI /v1 (qwen3.6-35b:128k)" --> VLLM
         Hermes -- "Automation Control" --> HASS
         Hermes -- "Tools / Search" --> Internet
 
         %% Data persistence
-        OllamaData -.- Ollama
+        HFCache -.- VLLM
         HermesData -.- Hermes
         WebUIData -.- WebUI
 
@@ -72,8 +70,8 @@ graph TD
 
     class WebUI frontend;
     class Hermes agent;
-    class Ollama backend;
-    class OllamaData,HermesData,WebUIData storage;
+    class VLLM backend;
+    class HFCache,HermesData,WebUIData storage;
     class Vault security;
 ```
 
@@ -83,14 +81,18 @@ graph TD
 | :--- | :--- | :--- | :--- |
 | **Open WebUI** | `8080` | `ghcr.io/open-webui/open-webui` | Primary frontend for user interaction. |
 | **Hermes Agent** | `8642` | `hermes-agent:latest` | The agentic engine handling tool use, memory, and task execution. |
-| **Ollama** | `11434` | `ollama/ollama:latest` | Local LLM inference server (NVIDIA GPU accelerated). |
+| **vLLM** | `8000` | `scitrera/dgx-spark-vllm:0.14.1-t4` | Local LLM inference server, ARM64 + GB10 Blackwell pre-built. Serves `Qwen/Qwen3.6-35B-A3B-FP8` multi-aliased. |
 | **Vault** | `8200` | `hashicorp/vault` | Secure storage for sensitive credentials (API keys, etc.). |
 
 ## 🌐 Ingress & Egress
 
 ### Ingress (How users connect)
 
-All published ports bind to `127.0.0.1` on the DGX host — nothing is reachable from the LAN. Access is exclusively through an **SSH tunnel** from the user's workstation.
+Most published ports bind to `127.0.0.1` on the DGX host and require an **SSH tunnel** from the user's workstation. The exceptions are:
+
+- **Open WebUI** on `0.0.0.0:8080` — primary user-facing UX, intentionally LAN-reachable.
+- **vLLM** on `0.0.0.0:8001` — LAN-reachable for direct OpenAI-compat API access (`http://192.168.10.80:8001/v1/*`); vLLM has no built-in auth, so this implicitly trusts the LAN.
+- **OpenClaw Caddy** on `0.0.0.0:443/80` and **openclaw-dashboard** on `0.0.0.0:9000` (sibling stack).
 
 **One-shot tunnel:**
 
@@ -98,7 +100,7 @@ All published ports bind to `127.0.0.1` on the DGX host — nothing is reachable
 ssh -N \
   -L 8080:127.0.0.1:8080 \
   -L 4096:127.0.0.1:4096 \
-  -L 11434:127.0.0.1:11434 \
+  -L 8001:127.0.0.1:8001 \
   dgx-spark
 ```
 
@@ -110,14 +112,14 @@ Host dgx-spark
   User <user>
   LocalForward 8080 127.0.0.1:8080
   LocalForward 4096 127.0.0.1:4096
-  LocalForward 11434 127.0.0.1:11434
+  LocalForward 8001 127.0.0.1:8001
   ExitOnForwardFailure yes
 ```
 
 With the tunnel up:
 - **Open WebUI**: http://localhost:8080 in a local browser (primary UX)
 - **OpenCode API**: `curl -u opencode:$OPENCODE_PASSWORD http://localhost:4096/...`
-- **Ollama** (optional, for `ollama list` from laptop): http://localhost:11434
+- **vLLM** (optional, for `curl http://localhost:8001/v1/models` from laptop): http://localhost:8001
 
 **Inspecting prototype output from the workstation:**
 - `sshfs dgx-spark:/home/admin/code/hermes-config/prototypes ~/dgx-prototypes` (live browse)
@@ -133,12 +135,12 @@ All credentials live in `.env` (gitignored) on the DGX host. Start from `.env.ex
 
 ### Egress (Where the system connects)
 - **Home Assistant**: Hermes Agent connects to `ha.internal` for smart home control.
-- **Inference**: Hermes and Plandex connect to Ollama via `http://ollama:11434`.
+- **Inference**: Hermes Agent and OpenCode connect to vLLM via `http://vllm:8000/v1`.
+- **HuggingFace**: vLLM downloads `Qwen/Qwen3.6-35B-A3B-FP8` weights on first boot (~37 GB). Cached afterward in the `vllm_hf_cache` volume.
 - **Public Internet**: The Hermes Agent has egress capability for web search tools and external API calls.
 
 ## 💾 Data Persistence
-- **Model Storage**: Ollama stores model weights in the `ollama_data` volume.
+- **Model Cache**: vLLM stores HuggingFace weights in the `vllm_hf_cache` volume; compiled CUDA graphs in `vllm_compile_cache`.
+- **Legacy Ollama Models**: The `ollama_data` volume is preserved (orphaned) for one-week rollback after the 2026-04-25 vLLM cutover. Drop with `docker volume rm ollama_data` once the new stack is proven stable.
 - **Agent State**: Persistent agent memory and logs are stored in the local `~/.hermes` directory, mapped to `/opt/data` in the container.
-- **WebUI Data**: User accounts and chat histories are persisted in the `open-webui_data` volume.
-e container.
 - **WebUI Data**: User accounts and chat histories are persisted in the `open-webui_data` volume.

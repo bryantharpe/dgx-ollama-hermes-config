@@ -112,15 +112,17 @@ services:
       - openclaw-gateway
 
   # socat sidecar in the gateway's netns. Forwards 127.0.0.1:18791 →
-  # ollama:11434 so mudrii's dashboard (which hardcodes 127.0.0.1:<gatewayPort>
-  # for chat) can reach ollama's OpenAI-compat /v1/chat/completions. The
-  # OpenClaw gateway itself does not serve chat over HTTP.
+  # vllm:8000 so mudrii's dashboard (which hardcodes 127.0.0.1:<gatewayPort>
+  # for chat) can reach vLLM's OpenAI-compat /v1/chat/completions. The
+  # OpenClaw gateway itself does not serve chat over HTTP. Sidecar name
+  # kept as "ollama-proxy" for stability across the 2026-04-25 vLLM
+  # migration — the symbol stays even though the target moved.
   openclaw-ollama-proxy:
     image: alpine/socat
     container_name: openclaw-ollama-proxy
     network_mode: "service:openclaw-gateway"
     restart: unless-stopped
-    command: ["TCP-LISTEN:18791,fork,reuseaddr", "TCP:ollama:11434"]
+    command: ["TCP-LISTEN:18791,fork,reuseaddr", "TCP:vllm:8000"]
     depends_on:
       openclaw-gateway:
         condition: service_healthy

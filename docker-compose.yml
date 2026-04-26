@@ -1,23 +1,62 @@
 services:
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
+  vllm:
+    # scitrera build is pre-compiled for DGX Spark (ARM64 + CUDA 13.1 + SM_120
+    # Blackwell + FlashInfer 0.6.2). vanilla vllm/vllm-openai is x86_64 only.
+    # `-t5` = Transformers 5.0+. Required because Qwen3.6-35B-A3B-FP8 uses the
+    # `qwen3_5_moe` architecture, which landed in Transformers main on
+    # 2026-02-09. Use 0.17.0+ (March 2026) — earlier 0.14.1-t5 (Jan 2026) and
+    # the `-t4` builds (Transformers 4.57.x) raise pydantic ValidationError
+    # "Transformers does not recognize this architecture" at engine startup.
+    image: scitrera/dgx-spark-vllm:0.17.0-t5
+    container_name: vllm
     ports:
-      - "127.0.0.1:11434:11434"
+      # Host port 8001 because 8000 is held by an unrelated prototype
+      # (ai-world-fair-companion). Internal port stays 8000 so all
+      # inter-container URLs (http://vllm:8000/v1) remain valid.
+      # Bound to 0.0.0.0 (not 127.0.0.1) so the LAN can reach the API
+      # at http://192.168.10.80:8001/v1/* — vLLM has no auth, so this
+      # implicitly trusts the LAN. If that's ever not OK, switch back
+      # to 127.0.0.1 and front it with the openclaw Caddy.
+      - "0.0.0.0:8001:8000"
     volumes:
-      - ollama_data:/root/.ollama
+      - vllm_hf_cache:/root/.cache/huggingface
+      - vllm_compile_cache:/root/.cache/vllm
     environment:
-      - OLLAMA_HOST=0.0.0.0
-      - OLLAMA_KEEP_ALIVE=-1
-      - OLLAMA_NUM_PARALLEL=2
-      - OLLAMA_MAX_LOADED_MODELS=2
-      - OLLAMA_MAX_VRAM=128G
-      - OLLAMA_KV_CACHE_TYPE=q8_0
-      - OLLAMA_FLASH_ATTENTION=1
-      - OLLAMA_CONTEXT_LENGTH=131072
-      - OLLAMA_ORIGINS=*
+      - HF_HOME=/root/.cache/huggingface
+      # HF_HUB_ENABLE_HF_TRANSFER would speed downloads but the scitrera
+      # image does not bundle the `hf_transfer` package and downloads crash
+      # when it's enabled. Standard urllib3 download is fine for one-shot.
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+      - VLLM_USE_V1=1
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    # Shared memory for inter-process model loading; required by vLLM under
+    # docker (default 64MB shm is not enough).
+    ipc: host
+    command:
+      - vllm
+      - serve
+      - Qwen/Qwen3.6-35B-A3B-FP8
+      - --host=0.0.0.0
+      - --port=8000
+      - --max-model-len=131072
+      - --gpu-memory-utilization=0.75
+      - --reasoning-parser=qwen3
+      - --enable-auto-tool-choice
+      # qwen3_coder is the correct parser per Qwen's HF model card; the
+      # `hermes` parser returns 400 on tool_choice=auto for this family
+      # (see NVIDIA forum thread 362784).
+      - --tool-call-parser=qwen3_coder
+      # Multi-alias so existing client configs (LLM_MODEL, opencode.json,
+      # openclaw.json) resolve to this backend without rename churn.
+      # NOTE: must use space-separated form (no `=`) so argparse nargs='+'
+      # consumes all four names; `--served-model-name=foo bar baz` only
+      # binds the first.
+      - --served-model-name
+      - qwen3.6-35b:128k
+      - qwen3.6:35b-a3b-q8_0
+      - qwen3.6-35b-a3b:q6-65k
+      - hermes-orchestrator:qwen3.6-128k
     deploy:
       resources:
         reservations:
@@ -25,6 +64,15 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    healthcheck:
+      # The scitrera image doesn't ship curl/wget; use python3 (always present
+      # in the vLLM container) for the /health probe.
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=5).status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # First boot downloads ~37GB and compiles CUDA graphs; allow 15min.
+      start_period: 900s
     restart: always
 
   hermes-agent:
@@ -45,7 +93,7 @@ services:
       - API_SERVER_KEY=${HERMES_API_KEY}
       - API_SERVER_HOST=0.0.0.0
       - HERMES_INFERENCE_PROVIDER=custom
-      - OPENAI_API_BASE_URL=http://ollama:11434/v1
+      - OPENAI_API_BASE_URL=http://vllm:8000/v1
       - OPENAI_API_KEY=none
       - LLM_MODEL=qwen3.6-35b:128k
       - OPENCODE_URL=http://opencode:4096
@@ -64,8 +112,10 @@ services:
     cap_drop:
       - DAC_OVERRIDE
     depends_on:
-      - ollama
-      - prototype-seeder
+      vllm:
+        condition: service_healthy
+      prototype-seeder:
+        condition: service_started
     restart: always
 
   open-webui:
@@ -76,12 +126,17 @@ services:
     volumes:
       - open-webui_data:/app/backend/data
     environment:
-      - OPENAI_API_BASE_URL=http://hermes-agent:8642/v1
-      - OPENAI_API_KEY=${HERMES_API_KEY}
-      - OLLAMA_BASE_URL=http://ollama:11434
+      # Multi-URL form: hermes-agent for orchestrated chats + raw vllm for
+      # bare-model access. Both speak OpenAI-compat /v1; OLLAMA_BASE_URL was
+      # dropped because vLLM does not implement Ollama-native /api/*.
+      - OPENAI_API_BASE_URLS=http://hermes-agent:8642/v1;http://vllm:8000/v1
+      - OPENAI_API_KEYS=${HERMES_API_KEY};none
       - HTTPX_TIMEOUT=600
     depends_on:
-      - hermes-agent
+      hermes-agent:
+        condition: service_started
+      vllm:
+        condition: service_healthy
     restart: always
 
   vault:
@@ -114,8 +169,10 @@ services:
     cap_drop:
       - DAC_OVERRIDE
     depends_on:
-      - ollama
-      - prototype-seeder
+      vllm:
+        condition: service_healthy
+      prototype-seeder:
+        condition: service_started
     restart: always
 
   prototype-seeder:
@@ -165,7 +222,12 @@ services:
     restart: always
 
 volumes:
+  # Kept (orphaned) for one-week rollback window after vLLM cutover 2026-04-25.
+  # Contains ~tens of GB of pulled Ollama models. `docker volume rm ollama_data`
+  # to reclaim once vLLM is proven stable.
   ollama_data:
+  vllm_hf_cache:
+  vllm_compile_cache:
   hermes_data:
   open-webui_data:
   netdata_config:

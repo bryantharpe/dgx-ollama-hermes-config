@@ -3,12 +3,11 @@
   "provider": {
     "ollama": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Ollama (local)",
-      "options": { "baseURL": "http://ollama:11434/v1" },
+      "name": "vLLM (local)",
+      "options": { "baseURL": "http://vllm:8000/v1" },
       "models": {
-        "qwen3.6:35b-a3b-q8_0": { "name": "Qwen3.6 35B A3B (Ollama official, Q8_0)" },
-        "qwen3.6-35b-a3b:q6-65k": { "name": "Qwen3.6 35B A3B (Q6_K, 65k ctx)" },
-        "qwen3-coder-next:q5-131k": { "name": "Qwen3-Coder-Next 80B A3B (Q5_K_M, 131k ctx)" }
+        "qwen3.6:35b-a3b-q8_0": { "name": "Qwen3.6 35B A3B (FP8, vLLM)" },
+        "qwen3.6-35b-a3b:q6-65k": { "name": "Qwen3.6 35B A3B (FP8, vLLM, alias)" }
       }
     }
   },
