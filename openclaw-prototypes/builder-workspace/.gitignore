@@ -1,0 +1,12 @@
+# Runtime state auto-bootstrapped by openclaw on first agent spawn.
+# Track only the source-of-truth files: IDENTITY.md and AGENTS.md.
+.openclaw/
+HEARTBEAT.md
+SOUL.md
+TOOLS.md
+USER.md
+memory/
+specs/
+prototypes/
+hooks/
+*.bak.*

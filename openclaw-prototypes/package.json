@@ -1,0 +1,10 @@
+{
+  "name": "@openclaw/openclaw-prototypes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prototype lifecycle (allocate / archive / verify / list / build / store_spec)",
+  "type": "module",
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  }
+}

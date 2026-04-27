@@ -18,6 +18,11 @@ services:
   openclaw-gateway:
     image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
     container_name: openclaw-gateway
+    # Add node user (UID 1000 inside container) to host docker group so the
+    # prototype-builder agent's pi session can use docker via the bind-mounted
+    # socket. GID 988 matches host /etc/group (verified `getent group docker`).
+    group_add:
+      - "988"
     environment:
       HOME: /home/node
       TERM: xterm-256color
@@ -40,6 +45,21 @@ services:
       - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
       - /home/admin/code/hermes-config/prototypes:/home/node/prototypes
+      # Custom plugin: openclaw-prototypes (source-of-truth lives in the repo so
+      # it's versioned alongside the rest of the stack; mounted into the
+      # gateway's plugin discovery path).
+      - /home/admin/code/hermes-config/openclaw-prototypes:/home/node/.openclaw/plugins/openclaw-prototypes
+      # Workspace for the prototype-builder agent (IDENTITY.md + AGENTS.md
+      # = the build-agent's lifted system prompt). Repo-tracked so it's
+      # versioned and reproducible.
+      - /home/admin/code/hermes-config/openclaw-prototypes/builder-workspace:/home/node/.openclaw/workspaces/prototype-builder
+      # Docker socket + CLI binaries — gives the prototype-builder agent the
+      # ability to run `docker compose up` for prototype containers. Tool
+      # policy gates which agent can call exec/bash to actually use them
+      # (only prototype-builder; Captain Nemo is denied group:runtime).
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker:ro
+      - /usr/libexec/docker/cli-plugins/docker-compose:/usr/libexec/docker/cli-plugins/docker-compose:ro
     ports:
       - "127.0.0.1:${OPENCLAW_GATEWAY_PORT:-18789}:18789"
       - "127.0.0.1:${OPENCLAW_BRIDGE_PORT:-18790}:18790"

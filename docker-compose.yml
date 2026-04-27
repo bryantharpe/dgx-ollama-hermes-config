@@ -2,11 +2,13 @@ services:
   vllm:
     # scitrera build is pre-compiled for DGX Spark (ARM64 + CUDA 13.1 + SM_120
     # Blackwell + FlashInfer 0.6.2). vanilla vllm/vllm-openai is x86_64 only.
-    # `-t5` = Transformers 5.0+. Required because Qwen3.6-35B-A3B-FP8 uses the
-    # `qwen3_5_moe` architecture, which landed in Transformers main on
-    # 2026-02-09. Use 0.17.0+ (March 2026) — earlier 0.14.1-t5 (Jan 2026) and
-    # the `-t4` builds (Transformers 4.57.x) raise pydantic ValidationError
-    # "Transformers does not recognize this architecture" at engine startup.
+    # `-t5` = Transformers 5.0+. Required by the Qwen3.6 family architectures
+    # (`qwen3_5` for the dense 27B served here; `qwen3_5_moe` for the older
+    # 35B-A3B that this slot used to serve), both of which landed in
+    # Transformers main on 2026-02-09. Use 0.17.0+ (March 2026) — earlier
+    # 0.14.1-t5 (Jan 2026) and the `-t4` builds (Transformers 4.57.x) raise
+    # pydantic ValidationError "Transformers does not recognize this
+    # architecture" at engine startup.
     image: scitrera/dgx-spark-vllm:0.17.0-t5
     container_name: vllm
     ports:
@@ -21,6 +23,13 @@ services:
     volumes:
       - vllm_hf_cache:/root/.cache/huggingface
       - vllm_compile_cache:/root/.cache/vllm
+      # Local edit of Qwen3.6's chat template that flips enable_thinking
+      # from default-on to default-off. Without this, the 27B reasons
+      # indefinitely on small/orchestration tasks and openclaw — which has
+      # no plumbing to inject `chat_template_kwargs` per request — wedges.
+      # Callers that genuinely want reasoning (e.g. the build coder)
+      # should send `chat_template_kwargs.enable_thinking=true`.
+      - ./vllm-templates/qwen3.6-27b.jinja:/etc/vllm/qwen3.6-27b.jinja:ro
     environment:
       - HF_HOME=/root/.cache/huggingface
       # HF_HUB_ENABLE_HF_TRANSFER would speed downloads but the scitrera
@@ -36,23 +45,61 @@ services:
     command:
       - vllm
       - serve
-      - Qwen/Qwen3.6-35B-A3B-FP8
+      - Qwen/Qwen3.6-27B-FP8
+      # 2026-04-27 perf survey:
+      # - Qwen3.6-27B-FP8 dense (this): ~7.4 t/s decode, CLEAN output
+      #   (chat template's enable_thinking=false works as intended).
+      # - Qwen3.6-35B-A3B-FP8 (MoE): ~17-25 t/s without prefill but the
+      #   model emits verbose thinking-prose by default; only useful with
+      #   assistant-turn prefill, which openclaw doesn't currently inject.
+      # - cyankiwi/Qwen3.6-27B-AWQ-INT4: ~12 t/s but the quant has
+      #   prose-heavy default style that flags can't suppress.
+      # - Ollama Qwen3 (3.0) :30B Q4_K_M: ~72 t/s and tool calling works,
+      #   but Qwen3.6 (qwen35 arch) is not yet supported in Ollama as of
+      #   0.21.2 (2026-04-23). Re-evaluate when Ollama ships qwen35.
+      # Net: dense 27B FP8 stays the canonical model — slow, but clean
+      # output and full tool-calling fidelity through the qwen3_coder
+      # parser. Build-agent timeouts already raised to 1800s to accommodate.
       - --host=0.0.0.0
       - --port=8000
-      - --max-model-len=131072
+      # 262144 = native context for Qwen3.6-27B. Larger KV cache reservation
+      # at startup (vs. the prior 131072), but the 27B dense weights are
+      # ~28GB FP8 (vs ~35GB for the prior 35B-A3B MoE), so the GB10's 128GB
+      # unified memory has room. If startup OOMs or KV cache budget warns
+      # too low, fall back to 196608 or 131072.
+      #
+      # Tested 2026-04-27: dropping to 65536 + bumping gpu-memory-utilization
+      # to 0.90 + adding --kv-cache-dtype=fp8 gave ZERO speedup (still 7.4 t/s
+      # decode, same as the 9.7 t/s theoretical peak from 273 GB/s ÷ 28 GB
+      # weights — we're memory-bandwidth-bound). FP8 KV cache also emitted
+      # accuracy warnings because the Qwen3.6-27B-FP8 checkpoint doesn't ship
+      # q/k/v calibration scales. Reverted to the original values.
+      - --max-model-len=262144
       - --gpu-memory-utilization=0.75
       - --reasoning-parser=qwen3
+      # Local default-off-thinking template; see volume comment above.
+      - --chat-template=/etc/vllm/qwen3.6-27b.jinja
       - --enable-auto-tool-choice
       # qwen3_coder is the correct parser per Qwen's HF model card; the
       # `hermes` parser returns 400 on tool_choice=auto for this family
       # (see NVIDIA forum thread 362784).
       - --tool-call-parser=qwen3_coder
       # Multi-alias so existing client configs (LLM_MODEL, opencode.json,
-      # openclaw.json) resolve to this backend without rename churn.
+      # openclaw.json) resolve to this backend without rename churn during
+      # the 35B-A3B → 27B cutover. New code should prefer the truthful
+      # `qwen3.6-27b:*` / `hermes-orchestrator:qwen3.6-27b-*` names; the
+      # legacy `qwen3.6-35b*` aliases are retained ONLY for compatibility
+      # and now resolve to the dense 27B model — they are misnomers and
+      # should be migrated off over time.
       # NOTE: must use space-separated form (no `=`) so argparse nargs='+'
-      # consumes all four names; `--served-model-name=foo bar baz` only
+      # consumes all the names; `--served-model-name=foo bar baz` only
       # binds the first.
       - --served-model-name
+      - qwen3.6-27b:262k
+      - qwen3.6-27b:128k
+      - qwen3.6:27b-fp8
+      - hermes-orchestrator:qwen3.6-27b-262k
+      - hermes-orchestrator:qwen3.6-27b-128k
       - qwen3.6-35b:128k
       - qwen3.6:35b-a3b-q8_0
       - qwen3.6-35b-a3b:q6-65k
@@ -71,7 +118,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      # First boot downloads ~37GB and compiles CUDA graphs; allow 15min.
+      # First boot downloads ~28GB (Qwen3.6-27B-FP8) and compiles CUDA
+      # graphs; allow 15min. Subsequent boots reuse vllm_hf_cache and
+      # vllm_compile_cache so they're much faster (~60–90s).
       start_period: 900s
     restart: always
 

@@ -1,0 +1,33 @@
+{
+  "id": "prototypes",
+  "name": "Prototype Lifecycle",
+  "description": "Allocate / archive / verify / list / build / store_spec tools for the prototype workflow.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "prototypesRoot": {
+        "type": "string",
+        "description": "Absolute path to the prototypes/ directory inside the gateway container. Defaults to /home/node/prototypes."
+      },
+      "portRange": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "min": { "type": "number" },
+          "max": { "type": "number" }
+        }
+      },
+      "hindsight": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "bankId": {
+            "type": "string",
+            "description": "Bank id for prototypes.store_spec. Defaults to bryan-prototypes."
+          }
+        }
+      }
+    }
+  }
+}
