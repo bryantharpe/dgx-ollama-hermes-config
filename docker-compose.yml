@@ -29,6 +29,9 @@ services:
       # Callers that genuinely want reasoning (e.g. the build coder)
       # should send `chat_template_kwargs.enable_thinking=true`.
       - ./vllm-templates/qwen3.6-27b.jinja:/etc/vllm/qwen3.6-27b.jinja:ro
+      # Kept mounted-but-unused so flipping back to 35B-A3B is the recipe in
+      # the comment near --chat-template below; no extra volume edit needed.
+      - ./vllm-templates/qwen3.6-35b-a3b.jinja:/etc/vllm/qwen3.6-35b-a3b.jinja:ro
     environment:
       - HF_HOME=/root/.cache/huggingface
       # HF_HUB_ENABLE_HF_TRANSFER would speed downloads but the scitrera
@@ -95,6 +98,20 @@ services:
       # openclaw (which can't inject chat_template_kwargs per request) wedges
       # on small orchestration tasks. Callers wanting reasoning should pass
       # chat_template_kwargs={"enable_thinking":true} per request.
+      #
+      # ── Flip-back recipe to Qwen3.6-35B-A3B-FP8 (MoE, prior canonical) ──
+      # The 35b-a3b jinja stays mounted at /etc/vllm/qwen3.6-35b-a3b.jinja
+      # specifically for this. To flip back, change four lines and recreate:
+      #   1. The model arg above:
+      #        Intel/Qwen3.6-27B-int4-AutoRound → Qwen/Qwen3.6-35B-A3B-FP8
+      #   2. --chat-template below:
+      #        qwen3.6-27b.jinja → qwen3.6-35b-a3b.jinja
+      #   3. Drop --speculative-config (35B-A3B has no MTP head; vllm errors
+      #      "speculative model has no draft head" at startup if left in).
+      #   4. --language-model-only stays (35B-A3B is text-only; harmless).
+      # Then: `docker compose up -d vllm`.
+      # See git log for the previous full 35B-A3B command shape (commit 6d88cbc
+      # is the migration AWAY from 35B; HEAD~1 of that has it intact).
       - --chat-template=/etc/vllm/qwen3.6-27b.jinja
       - --enable-auto-tool-choice
       # qwen3_coder is the correct parser per Qwen's HF model card; the
