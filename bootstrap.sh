@@ -1,16 +1,18 @@
 #!/bin/bash
 set -e
 
-# vLLM serves Qwen3.6-35B-A3B-FP8 multi-aliased to all the model names existing
-# clients send. ORCHESTRATOR_TAG is the canonical name written into
-# hermes-agent's config.yaml on first boot.
-ORCHESTRATOR_TAG="qwen3.6-35b:128k"
+# vLLM serves Intel/Qwen3.6-27B-int4-AutoRound (+ MTP=2) under a single
+# canonical alias. ORCHESTRATOR_TAG is the name written into hermes-agent's
+# config.yaml on first boot. The fix-up clause below also migrates any
+# previously-written value (e.g. "qwen3.6-35b:128k" from before consolidation)
+# to this canonical name on every bootstrap run.
+ORCHESTRATOR_TAG="qwen3.6-27b-int4:128k"
 
 echo "🚀 Starting Hermes services..."
 docker compose up -d
 
-echo "⌛ Waiting for vLLM to finish loading Qwen3.6-35B-A3B-FP8..."
-echo "   (first run downloads ~37 GB and compiles CUDA graphs — expect 8–15 min)"
+echo "⌛ Waiting for vLLM to finish loading Intel/Qwen3.6-27B-int4-AutoRound..."
+echo "   (first run downloads ~14 GB and compiles CUDA graphs — expect 8–15 min)"
 until curl -fsS http://127.0.0.1:8001/health >/dev/null 2>&1; do
   sleep 5
 done

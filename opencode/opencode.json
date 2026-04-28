@@ -6,11 +6,10 @@
       "name": "vLLM (local)",
       "options": { "baseURL": "http://vllm:8000/v1" },
       "models": {
-        "qwen3.6:35b-a3b-q8_0": { "name": "Qwen3.6 35B A3B (FP8, vLLM)" },
-        "qwen3.6-35b-a3b:q6-65k": { "name": "Qwen3.6 35B A3B (FP8, vLLM, alias)" }
+        "qwen3.6-27b-int4:128k": { "name": "Qwen3.6 27B INT4 AutoRound + MTP=2 (vLLM)" }
       }
     }
   },
-  "model": "ollama/qwen3.6:35b-a3b-q8_0",
-  "small_model": "ollama/qwen3.6:35b-a3b-q8_0"
+  "model": "ollama/qwen3.6-27b-int4:128k",
+  "small_model": "ollama/qwen3.6-27b-int4:128k"
 }

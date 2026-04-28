@@ -2,11 +2,12 @@ services:
   vllm:
     # scitrera build is pre-compiled for DGX Spark (ARM64 + CUDA 13.1 + SM_120
     # Blackwell + FlashInfer 0.6.2). vanilla vllm/vllm-openai is x86_64 only.
-    # `-t5` = Transformers 5.0+. Required because Qwen3.6-35B-A3B-FP8 uses the
-    # `qwen3_5_moe` architecture, which landed in Transformers main on
-    # 2026-02-09. Use 0.17.0+ (March 2026) — earlier 0.14.1-t5 (Jan 2026) and
-    # the `-t4` builds (Transformers 4.57.x) raise pydantic ValidationError
-    # "Transformers does not recognize this architecture" at engine startup.
+    # `-t5` = Transformers 5.0+. Required by the Qwen3.6 family architectures
+    # (`qwen3_5` for the dense 27B served here). 0.17.0+ also covers AutoRound
+    # INT4 (in vLLM since 0.14.0) — no engine upgrade needed. Earlier
+    # 0.14.1-t5 (Jan 2026) and the `-t4` builds (Transformers 4.57.x) raise
+    # pydantic ValidationError "Transformers does not recognize this
+    # architecture" at engine startup.
     image: scitrera/dgx-spark-vllm:0.17.0-t5
     container_name: vllm
     ports:
@@ -21,6 +22,16 @@ services:
     volumes:
       - vllm_hf_cache:/root/.cache/huggingface
       - vllm_compile_cache:/root/.cache/vllm
+      # Local edit of Qwen3.6's chat template that flips enable_thinking
+      # from default-on to default-off. Without this, the dense 27B reasons
+      # indefinitely on small/orchestration tasks and openclaw — which has
+      # no plumbing to inject `chat_template_kwargs` per request — wedges.
+      # Callers that genuinely want reasoning (e.g. the build coder)
+      # should send `chat_template_kwargs.enable_thinking=true`.
+      - ./vllm-templates/qwen3.6-27b.jinja:/etc/vllm/qwen3.6-27b.jinja:ro
+      # Kept mounted-but-unused so flipping back to 35B-A3B is the recipe in
+      # the comment near --chat-template below; no extra volume edit needed.
+      - ./vllm-templates/qwen3.6-35b-a3b.jinja:/etc/vllm/qwen3.6-35b-a3b.jinja:ro
     environment:
       - HF_HOME=/root/.cache/huggingface
       # HF_HUB_ENABLE_HF_TRANSFER would speed downloads but the scitrera
@@ -36,27 +47,88 @@ services:
     command:
       - vllm
       - serve
-      - Qwen/Qwen3.6-35B-A3B-FP8
+      - Intel/Qwen3.6-27B-int4-AutoRound
+      # 2026-04-28 — migrated from Qwen3.6-35B-A3B-FP8 (MoE) to Intel's
+      # AutoRound INT4 dense + MTP speculative decoding.
+      # Phase 1 perf bench (single-stream decode, 400 tokens ignore_eos):
+      #   - 27B-FP8 baseline:           7.4 t/s  (1.0x — historical baseline)
+      #   - 27B-FP8 + MTP=3:           12.0 t/s  (1.62x)
+      #   - 27B-INT4-AutoRound:        12.9 t/s  (1.74x — INT4 alone ≈ FP8+MTP)
+      #   - 27B-INT4 + MTP=2 [chosen]: 20.0 t/s  (2.70x)
+      #   - 35B-A3B-FP8 (prior main): ~46-48 t/s (still 2.3x faster — MoE wins
+      #                                           on raw throughput).
+      # Why dense INT4 instead of MoE FP8: gives a dense-27B alternative for
+      # workloads where MoE prose habits or expert-routing variance hurt; ~14 GB
+      # parameter footprint vs ~35 GB; AutoRound is near-lossless on standard
+      # benchmarks per Intel's claims (we have NOT run a quality eval —
+      # validate openclaw / hermes-agent behavior in soak before committing
+      # downstream client renames).
+      # Engine support: AutoRound INT4 lands in vLLM ≥0.14.0; our 0.17.0-t5
+      # ARM64 + Blackwell SM_120 build covers it (no FP4 tensor-core path
+      # needed — INT4→BF16 dequant uses standard CUDA paths).
+      # MTP head: built into upstream Qwen/Qwen3.6-27B-FP8 weights and
+      # preserved through the AutoRound quant. =2 chosen per Intel model card
+      # and our bench (=3 yields diminishing returns once the INT4 floor is
+      # already high).
+      # Other survey points (kept for context):
+      # - sakamakismile/Qwen3.6-27B-NVFP4: blocked on scitrera 0.17.0-t5 — needs
+      #   vLLM ≥0.19.1rc1; revisit when scitrera ships a newer image.
+      # - cyankiwi/Qwen3.6-27B-AWQ-INT4: ~12 t/s, prose-heavy quant, won't fix.
       - --host=0.0.0.0
       - --port=8000
-      - --max-model-len=131072
+      # 262144 = native context for Qwen3.6 family. INT4 weights are ~14 GB
+      # and KV cache (FP8) at 262k context fits comfortably in 128 GB unified
+      # at gpu-memory-utilization=0.75. If memory ever tightens, drop to
+      # 131072.
+      - --max-model-len=262144
       - --gpu-memory-utilization=0.75
+      # Perf tune-up flags: KV cache fp8 halves attention memory at negligible
+      # quality loss; prefix caching reuses KV across requests sharing a
+      # system-prompt prefix; chunked prefill + max-num-batched-tokens=16384
+      # lets long prefills interleave with decode so short queries don't stall
+      # behind a 200k-token prompt; max-num-seqs=4 right-sizes concurrency for
+      # single-user interactive use.
+      - --kv-cache-dtype=fp8
+      - --enable-prefix-caching
+      - --enable-chunked-prefill
+      - --max-num-seqs=4
+      - --max-num-batched-tokens=16384
       - --reasoning-parser=qwen3
+      # 27B chat template flips enable_thinking default-OFF. Without this,
+      # openclaw (which can't inject chat_template_kwargs per request) wedges
+      # on small orchestration tasks. Callers wanting reasoning should pass
+      # chat_template_kwargs={"enable_thinking":true} per request.
+      #
+      # ── Flip-back recipe to Qwen3.6-35B-A3B-FP8 (MoE, prior canonical) ──
+      # The 35b-a3b jinja stays mounted at /etc/vllm/qwen3.6-35b-a3b.jinja
+      # specifically for this. To flip back, change four lines and recreate:
+      #   1. The model arg above:
+      #        Intel/Qwen3.6-27B-int4-AutoRound → Qwen/Qwen3.6-35B-A3B-FP8
+      #   2. --chat-template below:
+      #        qwen3.6-27b.jinja → qwen3.6-35b-a3b.jinja
+      #   3. Drop --speculative-config (35B-A3B has no MTP head; vllm errors
+      #      "speculative model has no draft head" at startup if left in).
+      #   4. --language-model-only stays (35B-A3B is text-only; harmless).
+      # Then: `docker compose up -d vllm`.
+      # See git log for the previous full 35B-A3B command shape (commit 6d88cbc
+      # is the migration AWAY from 35B; HEAD~1 of that has it intact).
+      - --chat-template=/etc/vllm/qwen3.6-27b.jinja
       - --enable-auto-tool-choice
       # qwen3_coder is the correct parser per Qwen's HF model card; the
       # `hermes` parser returns 400 on tool_choice=auto for this family
       # (see NVIDIA forum thread 362784).
       - --tool-call-parser=qwen3_coder
-      # Multi-alias so existing client configs (LLM_MODEL, opencode.json,
-      # openclaw.json) resolve to this backend without rename churn.
-      # NOTE: must use space-separated form (no `=`) so argparse nargs='+'
-      # consumes all four names; `--served-model-name=foo bar baz` only
-      # binds the first.
-      - --served-model-name
-      - qwen3.6-35b:128k
-      - qwen3.6:35b-a3b-q8_0
-      - qwen3.6-35b-a3b:q6-65k
-      - hermes-orchestrator:qwen3.6-128k
+      # Skip the model's vision tower — none of our clients use it; saves a
+      # few GB and ~10s of startup time.
+      - --language-model-only
+      # MTP speculative decoding (Qwen's qwen3_next_mtp method). The MTP head
+      # ships in Qwen/Qwen3.6-27B-FP8 and is preserved through Intel's
+      # AutoRound quant. =2 measured 1.55x on top of INT4-alone in Phase 1.
+      - '--speculative-config={"method":"qwen3_next_mtp","num_speculative_tokens":2}'
+      # Single canonical alias. All clients (hermes-agent LLM_MODEL,
+      # opencode.json, openclaw.json) reference this exact string. Adding new
+      # aliases or renaming requires a coordinated client + vllm change.
+      - --served-model-name=qwen3.6-27b-int4:128k
     deploy:
       resources:
         reservations:
@@ -71,9 +143,215 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      # First boot downloads ~37GB and compiles CUDA graphs; allow 15min.
+      # First boot downloads ~14 GB (Intel AutoRound INT4) and compiles CUDA
+      # graphs (MTP adds an extra capture pass); allow 15min. Subsequent boots
+      # reuse vllm_hf_cache and vllm_compile_cache (~5-7 min).
       start_period: 900s
     restart: always
+
+  # Opt-in perf test sidecars (profiles: test). Manually invoked, never
+  # auto-started. Used to A/B test 27B-FP8 with and without MTP speculative
+  # decoding. Both bind to host port 8002 so only one can run at a time.
+  # Memory reality: GB10 has 128 GB unified shared between main vllm + this;
+  # main vllm must be stopped before bringing either of these up. Bring up
+  # with: docker compose --profile test up -d vllm-test-mtp
+  vllm-test-mtp:
+    profiles: ["test"]
+    image: scitrera/dgx-spark-vllm:0.17.0-t5
+    container_name: vllm-test-mtp
+    ports:
+      - "127.0.0.1:8002:8000"
+    volumes:
+      - vllm_hf_cache:/root/.cache/huggingface
+      - vllm_test_compile_cache:/root/.cache/vllm
+    environment:
+      - HF_HOME=/root/.cache/huggingface
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+      - VLLM_USE_V1=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    ipc: host
+    command:
+      - vllm
+      - serve
+      - Qwen/Qwen3.6-27B-FP8
+      - --host=0.0.0.0
+      - --port=8000
+      - --max-model-len=32768
+      - --gpu-memory-utilization=0.75
+      - --kv-cache-dtype=fp8
+      - --enable-prefix-caching
+      - --enable-chunked-prefill
+      - --max-num-seqs=4
+      - --max-num-batched-tokens=16384
+      - --reasoning-parser=qwen3
+      - --enable-auto-tool-choice
+      - --tool-call-parser=qwen3_coder
+      - --language-model-only
+      - '--speculative-config={"method":"qwen3_next_mtp","num_speculative_tokens":3}'
+      - --served-model-name=qwen3.6-27b-fp8
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=5).status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 600s
+    restart: "no"
+
+  vllm-test-int4-mtp:
+    profiles: ["test"]
+    image: scitrera/dgx-spark-vllm:0.17.0-t5
+    container_name: vllm-test-int4-mtp
+    ports:
+      - "127.0.0.1:8002:8000"
+    volumes:
+      - vllm_hf_cache:/root/.cache/huggingface
+      - vllm_test_compile_cache:/root/.cache/vllm
+    environment:
+      - HF_HOME=/root/.cache/huggingface
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+      - VLLM_USE_V1=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    ipc: host
+    command:
+      - vllm
+      - serve
+      - Intel/Qwen3.6-27B-int4-AutoRound
+      - --host=0.0.0.0
+      - --port=8000
+      - --max-model-len=32768
+      - --gpu-memory-utilization=0.75
+      - --kv-cache-dtype=fp8
+      - --enable-prefix-caching
+      - --enable-chunked-prefill
+      - --max-num-seqs=4
+      - --max-num-batched-tokens=16384
+      - --reasoning-parser=qwen3
+      - --enable-auto-tool-choice
+      - --tool-call-parser=qwen3_coder
+      - --language-model-only
+      - '--speculative-config={"method":"qwen3_next_mtp","num_speculative_tokens":2}'
+      - --served-model-name=qwen3.6-27b-int4
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=5).status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 900s
+    restart: "no"
+
+  vllm-test-int4-base:
+    profiles: ["test"]
+    image: scitrera/dgx-spark-vllm:0.17.0-t5
+    container_name: vllm-test-int4-base
+    ports:
+      - "127.0.0.1:8002:8000"
+    volumes:
+      - vllm_hf_cache:/root/.cache/huggingface
+      - vllm_test_compile_cache:/root/.cache/vllm
+    environment:
+      - HF_HOME=/root/.cache/huggingface
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+      - VLLM_USE_V1=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    ipc: host
+    command:
+      - vllm
+      - serve
+      - Intel/Qwen3.6-27B-int4-AutoRound
+      - --host=0.0.0.0
+      - --port=8000
+      - --max-model-len=32768
+      - --gpu-memory-utilization=0.75
+      - --kv-cache-dtype=fp8
+      - --enable-prefix-caching
+      - --enable-chunked-prefill
+      - --max-num-seqs=4
+      - --max-num-batched-tokens=16384
+      - --reasoning-parser=qwen3
+      - --enable-auto-tool-choice
+      - --tool-call-parser=qwen3_coder
+      - --language-model-only
+      - --served-model-name=qwen3.6-27b-int4
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=5).status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 900s
+    restart: "no"
+
+  vllm-test-base:
+    profiles: ["test"]
+    image: scitrera/dgx-spark-vllm:0.17.0-t5
+    container_name: vllm-test-base
+    ports:
+      - "127.0.0.1:8002:8000"
+    volumes:
+      - vllm_hf_cache:/root/.cache/huggingface
+      - vllm_test_compile_cache:/root/.cache/vllm
+    environment:
+      - HF_HOME=/root/.cache/huggingface
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+      - VLLM_USE_V1=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    ipc: host
+    command:
+      - vllm
+      - serve
+      - Qwen/Qwen3.6-27B-FP8
+      - --host=0.0.0.0
+      - --port=8000
+      - --max-model-len=32768
+      - --gpu-memory-utilization=0.75
+      - --kv-cache-dtype=fp8
+      - --enable-prefix-caching
+      - --enable-chunked-prefill
+      - --max-num-seqs=4
+      - --max-num-batched-tokens=16384
+      - --reasoning-parser=qwen3
+      - --enable-auto-tool-choice
+      - --tool-call-parser=qwen3_coder
+      - --language-model-only
+      - --served-model-name=qwen3.6-27b-fp8
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=5).status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 600s
+    restart: "no"
 
   hermes-agent:
     build: ./hermes-agent
@@ -95,7 +373,7 @@ services:
       - HERMES_INFERENCE_PROVIDER=custom
       - OPENAI_API_BASE_URL=http://vllm:8000/v1
       - OPENAI_API_KEY=none
-      - LLM_MODEL=qwen3.6-35b:128k
+      - LLM_MODEL=qwen3.6-27b-int4:128k
       - OPENCODE_URL=http://opencode:4096
       - OPENCODE_USERNAME=opencode
       - OPENCODE_PASSWORD=${OPENCODE_PASSWORD}
@@ -228,6 +506,7 @@ volumes:
   ollama_data:
   vllm_hf_cache:
   vllm_compile_cache:
+  vllm_test_compile_cache:
   hermes_data:
   open-webui_data:
   netdata_config:

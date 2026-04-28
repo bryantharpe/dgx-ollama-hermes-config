@@ -17,6 +17,8 @@
       ]
     },
     "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}",
       "rateLimit": {
         "maxAttempts": 10,
         "windowMs": 60000,
@@ -29,11 +31,10 @@
       "vllm": {
         "apiKey": "vllm-local",
         "baseUrl": "http://vllm:8000/v1",
-        "api": "openai-completions",
         "models": [
           {
-            "id": "hermes-orchestrator:qwen3.6-128k",
-            "name": "hermes-orchestrator:qwen3.6-128k",
+            "id": "qwen3.6-27b-int4:128k",
+            "name": "Qwen3.6 27B INT4 AutoRound + MTP=2",
             "reasoning": true,
             "input": [
               "text"
@@ -45,35 +46,21 @@
               "cacheWrite": 0
             },
             "contextWindow": 128000,
-            "maxTokens": 16384
-          },
-          {
-            "id": "qwen3.6-35b:128k",
-            "name": "qwen3.6-35b:128k",
-            "reasoning": true,
-            "input": [
-              "text"
-            ],
-            "cost": {
-              "input": 0,
-              "output": 0,
-              "cacheRead": 0,
-              "cacheWrite": 0
-            },
-            "contextWindow": 128000,
-            "maxTokens": 16384
+            "maxTokens": 16384,
+            "api": "openai-completions"
           }
-        ]
+        ],
+        "api": "openai-completions"
       }
     }
   },
   "agents": {
     "defaults": {
       "model": {
-        "primary": "vllm/hermes-orchestrator:qwen3.6-128k"
+        "primary": "vllm/qwen3.6-27b-int4:128k"
       },
       "llm": {
-        "idleTimeoutSeconds": 300
+        "idleTimeoutSeconds": 1800
       },
       "heartbeat": {
         "every": "1h",
@@ -84,8 +71,64 @@
           "start": "08:00",
           "end": "22:00"
         }
+      },
+      "compaction": {
+        "mode": "safeguard"
       }
-    }
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "name": "Captain Nemo",
+        "workspace": "/home/node/.openclaw/workspace",
+        "agentDir": "/home/node/.openclaw/agents/main/agent",
+        "model": "vllm/qwen3.6-27b-int4:128k",
+        "tools": {
+          "profile": "messaging",
+          "alsoAllow": [
+            "prototypes.build",
+            "prototypes.list",
+            "prototypes.verify",
+            "prototypes.store_spec",
+            "sessions_spawn"
+          ]
+        },
+        "subagents": {
+          "allowAgents": [
+            "prototype-builder"
+          ],
+          "requireAgentId": true
+        }
+      },
+      {
+        "id": "prototype-builder",
+        "name": "Prototype Builder",
+        "workspace": "/home/node/.openclaw/workspaces/prototype-builder",
+        "agentDir": "/home/node/.openclaw/agents/prototype-builder/agent",
+        "model": "vllm/qwen3.6-27b-int4:128k",
+        "sandbox": {
+          "mode": "off"
+        },
+        "tools": {
+          "profile": "coding",
+          "alsoAllow": [
+            "prototypes.allocate",
+            "prototypes.archive",
+            "prototypes.verify"
+          ],
+          "deny": [
+            "sessions_spawn",
+            "browser",
+            "canvas"
+          ]
+        }
+      }
+    ]
+  },
+  "meta": {
+    "lastTouchedVersion": "2026.4.1",
+    "lastTouchedAt": "2026-04-27T00:38:46.022Z"
   },
   "skills": {
     "allowBundled": [
@@ -95,8 +138,8 @@
   },
   "tools": {
     "exec": {
-      "security": "allowlist",
-      "ask": "on-miss",
+      "security": "full",
+      "ask": "off",
       "strictInlineEval": true
     },
     "web": {
@@ -108,7 +151,9 @@
     }
   },
   "plugins": {
-    "slots": {},
+    "slots": {
+      "memory": "memory-lancedb"
+    },
     "entries": {
       "memory-lancedb": {
         "enabled": false,
@@ -126,14 +171,31 @@
       },
       "brave": {
         "enabled": true
+      },
+      "prototypes": {
+        "enabled": true
+      }
+    },
+    "load": {
+      "paths": [
+        "/home/node/.openclaw/plugins/openclaw-prototypes"
+      ]
+    },
+    "installs": {
+      "prototypes": {
+        "source": "path",
+        "sourcePath": "/home/node/.openclaw/plugins/openclaw-prototypes",
+        "installPath": "/home/node/.openclaw/plugins/openclaw-prototypes",
+        "version": "0.1.0",
+        "installedAt": "2026-04-27T00:38:45.760Z"
       }
     }
   },
   "channels": {
     "telegram": {
-      "enabled": false,
+      "enabled": true,
       "dmPolicy": "pairing",
-      "botToken": "",
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
       "groupPolicy": "allowlist",
       "streaming": "partial"
     }
