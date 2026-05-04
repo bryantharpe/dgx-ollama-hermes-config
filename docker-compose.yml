@@ -353,6 +353,185 @@ services:
       start_period: 600s
     restart: "no"
 
+  # ── Migration target: parallel SGLang serving the same model ───────────────
+  # Background in vllm-to-sglang-migration-plan.md. SGLang on a NEWER stack
+  # (CUDA 13.2 / PyTorch 2.11 / FlashInfer 0.6.7 / Transformers 5.5.3) than
+  # the stalled scitrera vLLM image (CUDA 13.1 / FlashInfer 0.6.2). Serves on
+  # host port 8002 alongside vLLM on 8001 — vLLM keeps serving openclaw the
+  # whole time. Flip openclaw / hermes-agent / opencode internal URLs only
+  # after `eval/runner.py --tier=full --judge=opus46` shows parity AND
+  # sglang completes a full run without engine crash.
+  #
+  # MTP / spec-decode is intentionally OFF in the initial bring-up — get the
+  # model loading and a clean smoke completion first, then add
+  # `--speculative-algorithm EAGLE` etc. once we know the base path is
+  # working. (vLLM's `cudaErrorIllegalAddress` lives in the MTP path; isolate
+  # before re-introducing.)
+  #
+  # Port collision note: vllm-test-* (profile=test) also bind 8002. Don't
+  # `--profile test up` while sglang is running.
+  sglang:
+    image: scitrera/dgx-spark-sglang:0.5.10
+    container_name: sglang
+    ports:
+      # Host 8002 → container 30000 (sglang's default OpenAI-compatible port).
+      # Bound to 0.0.0.0 so the eval harness can reach it from a host shell;
+      # LAN exposure is the same trust model as vLLM (no auth).
+      - "0.0.0.0:8002:30000"
+    volumes:
+      # Share vLLM's HF cache so we don't re-download 14 GB of Intel
+      # AutoRound weights. Read-write (not :ro) because sglang may want to
+      # write tokenizer/auxiliary metadata; concurrent reads with vLLM are
+      # safe (HF cache is content-addressed).
+      - vllm_hf_cache:/root/.cache/huggingface
+      # Separate compile cache — sglang's torch.compile artefacts are not
+      # interchangeable with vLLM's.
+      - sglang_compile_cache:/root/.cache/sglang
+      # Reuse the same chat template that flips enable_thinking default-OFF.
+      # Mount path differs (/etc/sglang vs /etc/vllm) so the two services
+      # have distinct in-container paths and can't accidentally share state.
+      - ./vllm-templates/qwen3.6-27b.jinja:/etc/sglang/qwen3.6-27b.jinja:ro
+    environment:
+      - HF_HOME=/root/.cache/huggingface
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # Required when speculative decoding (EAGLE) is on for Qwen3.6
+      # hybrid-attention models AND we want radix cache. Without it,
+      # sglang errors at startup. See --mamba-scheduler-strategy below.
+      - SGLANG_ENABLE_SPEC_V2=1
+    ipc: host
+    command:
+      - python3
+      - -m
+      - sglang.launch_server
+      # Model: sakamakismile/Huihui-Qwen3.6-27B-abliterated-NVFP4-MTP
+      # — same abliterated personality as the compressed-tensors variant
+      # we tested previously, but quantised via NVIDIA ModelOpt 0.43.0
+      # (NVFP4_DEFAULT_CFG) and ships an MTP draft head (~850 MB bf16, 15
+      # mtp.* tensors). The draft head enables speculative decoding via
+      # the EAGLE algorithm in sglang, expected to ~2x decode rate over
+      # the no-MTP variant (sakamakismile reports per-position acceptance
+      # 87/72/61% on rtx pro 6000).
+      #
+      # To A/B vs the no-MTP abliterated:
+      #   sakamakismile/Huihui-Qwen3.6-27B-abliterated-NVFP4-MTP
+      # → sakamakismile/Huihui-Qwen3.6-27B-abliterated-NVFP4
+      # AND change --quantization back to compressed-tensors AND remove the
+      # --speculative-* flags below.
+      - --model-path=sakamakismile/Huihui-Qwen3.6-27B-abliterated-NVFP4-MTP
+      # ModelOpt's NVFP4 output uses NVIDIA's own quant_config layout
+      # (different from compressed-tensors). sglang has a dedicated loader
+      # via this choice (per QUANTIZATION_CHOICES in server_args.py).
+      - --quantization=modelopt
+      - --host=0.0.0.0
+      - --port=30000
+      # 262144 = native context for Qwen3.6 family, same as vLLM.
+      - --context-length=262144
+      # 0.75 of unified memory budget. Same envelope as vLLM's
+      # gpu-memory-utilization. Sglang separates this into mem-fraction-static
+      # (model + activations) — we'll watch KV cache headroom in /metrics.
+      - --mem-fraction-static=0.75
+      # Start with `auto` rather than fp8_e5m2/e4m3 to let sglang pick the
+      # variant Intel's AutoRound runtime expects. Tighten later if memory
+      # pressure shows up.
+      - --kv-cache-dtype=auto
+      # Force non-cuDNN GEMM kernels — the scitrera image has cuDNN libs
+      # but is missing the `nvidia-cudnn-frontend` Python package, which
+      # the auto/flashinfer_cudnn paths require. CUTLASS is well-tested on
+      # SM_120 Blackwell and avoids that dependency entirely. Both flags
+      # are needed because the model has NVFP4 weights AND FP8 KV cache /
+      # intermediates. If we end up sticking with sglang, the proper fix
+      # is to bake `pip install nvidia-cudnn-frontend` into a custom layer
+      # on top of this image; for now, sidestepping is cheaper.
+      - --fp4-gemm-backend=cutlass
+      - --fp8-gemm-backend=cutlass
+      - --chunked-prefill-size=16384
+      - --max-prefill-tokens=16384
+      - --max-running-requests=4
+      # Same parser names as vLLM — sglang adopted them.
+      - --reasoning-parser=qwen3
+      - --tool-call-parser=qwen3_coder
+      - --chat-template=/etc/sglang/qwen3.6-27b.jinja
+      # Served-model-name encodes both quant and engine for A/B clarity.
+      # Each variant lands in its own results/<model>/ directory.
+      # Note: sglang reserves `:` for LoRA model:adapter syntax (rejects
+      # colons in --served-model-name) — use dashes throughout.
+      - --served-model-name=qwen3.6-27b-abl-nvfp4-mtp-sg
+      # MTP speculative decoding TEMPORARILY DISABLED for diagnostic — the
+      # MTP variant of this model fails to LOAD on sglang (weight shape
+      # assertion in linear.py:713) regardless of spec-decode flags.
+      # Confirming whether the failure is model-loading or spec-decode
+      # interaction by trying without spec flags first.
+      # - --speculative-algorithm=EAGLE
+      # - --speculative-num-steps=2
+      # - --speculative-num-draft-tokens=4
+      # - --speculative-eagle-topk=1
+      # - --mamba-scheduler-strategy=extra_buffer
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      # Sglang's /health endpoint follows OpenAI-compatible convention.
+      # Same python3 probe shape as vLLM (the scitrera image ships python3).
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:30000/health',timeout=5).status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # First boot reuses HF cache (no re-download) but compiles CUDA graphs
+      # on the newer torch.compile stack — allow 15 min.
+      start_period: 900s
+    # Manual lifecycle during validation — don't auto-restart on crash so
+    # crashes are visible to the operator. Flip to `always` at cutover.
+    restart: "no"
+
+  # ── Migration candidate #2: ollama (GGUF / llama.cpp under the hood) ──────
+  # Background in vllm-to-sglang-migration-plan.md (broader migration). After
+  # sglang validation showed quality regressions on tools/coding/long-context
+  # vs vLLM, ollama is being evaluated as the more conservative alternative
+  # (Bryan ran it pre-vLLM until 2026-04-25 — `ollama_data` volume kept).
+  # Memory: same constraint as sglang — can't run alongside vllm at full
+  # envelope. Same stop-and-swap workflow during validation.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      # 11434 = ollama default. Bound to 0.0.0.0 so eval harness on host
+      # AND any LAN client can hit /v1/* (no auth, same trust model as vLLM).
+      - "0.0.0.0:11434:11434"
+    volumes:
+      # Reuse the orphaned ollama_data volume from before the vLLM cutover.
+      # Cached GGUFs there (qwen3.5/3.6 era) save re-download time if any
+      # match; new pulls add to the same store.
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      # Keep models loaded across requests (ollama defaults to ~5min unload).
+      # Eval harness sends bursts of requests with idle gaps between probes.
+      - OLLAMA_KEEP_ALIVE=24h
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      # Ollama exposes /api/tags as a no-op list endpoint; ~ 1ms response.
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Manual lifecycle during validation. Flip to `always` at cutover.
+    restart: "no"
+
   hermes-agent:
     build: ./hermes-agent
     image: hermes-agent:latest
@@ -507,6 +686,7 @@ volumes:
   vllm_hf_cache:
   vllm_compile_cache:
   vllm_test_compile_cache:
+  sglang_compile_cache:
   hermes_data:
   open-webui_data:
   netdata_config:

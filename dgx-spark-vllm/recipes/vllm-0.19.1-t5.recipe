@@ -1,0 +1,42 @@
+# vLLM 0.19.1-t5 recipe for DGX Spark (ARM64 + Blackwell SM_120)
+#
+# Built ON TOP OF scitrera/cuda-containers's pre-existing recipe pipeline
+# (Dockerfile.llm_inference + build-image.sh). See:
+#   - dgx-spark-vllm/RECIPE-NOTES.md   for the pin matrix and bump rationale
+#   - dgx-spark-vllm/README.md         for build invocation
+#   - dgx-spark-vllm/build.sh          for the wrapper that calls upstream
+#
+# Goal: NVFP4 quantization support (e.g. sakamakismile/Qwen3.6-27B-NVFP4
+# and the Text-NVFP4-MTP sibling). Per the model cards: NVFP4 + Blackwell
+# SM_120 needs vLLM >= 0.19, tested on 0.19.1rc1.
+#
+# Delta vs scitrera's published vllm-0.17.0-t5.recipe (4 lines, see
+# RECIPE-NOTES.md "Recipe diff vs 0.17.0-t5" for the rationale):
+#   - VLLM_VERSION         0.17.0  -> 0.19.1
+#   - FLASHINFER_VERSION   0.6.5   -> 0.6.6  (vLLM 0.19.1 cuda.txt pin)
+#   - TRANSFORMERS_VERSION 5.3.0   -> 5.5.3  (vLLM 0.19.1 excludes 5.0-5.5.0;
+#                                             5.5.3 matches scitrera's
+#                                             sglang-0.5.10 known-good)
+#   - IMAGE_TAG            scitrera/...:0.17.0-t5 -> local/...:0.19.1-t5-dev
+#                          (local/ namespace so it cannot shadow upstream)
+#
+# Everything else (DEV_BASE_IMAGE, RUN_BASE_IMAGE, TRITON_VERSION, CUDA via
+# the -v2-cu131 base) stays IDENTICAL to scitrera's prod 0.17.0-t5 — that
+# is the whole point of choosing 0.19.1 over 0.20.0 (which would require
+# the 2.11.0-v1-cu132 base).
+
+DOCKERFILE=Dockerfile.llm_inference
+TARGET=vllm_runtime
+
+DEV_BASE_IMAGE=scitrera/dgx-spark-pytorch-dev:2.10.0-v2-cu131
+RUN_BASE_IMAGE=scitrera/dgx-spark-pytorch-runtime:2.10.0-v2-cu131
+
+FLASHINFER_VERSION=0.6.6
+TRITON_VERSION=3.6.0
+
+TRANSFORMERS_VERSION=5.5.3
+#TRANSFORMERS_REF=""
+
+VLLM_VERSION=0.19.1
+
+IMAGE_TAG=local/dgx-spark-vllm:0.19.1-t5-dev
