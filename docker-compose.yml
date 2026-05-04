@@ -489,13 +489,19 @@ services:
     # crashes are visible to the operator. Flip to `always` at cutover.
     restart: "no"
 
-  # ── Migration candidate #2: ollama (GGUF / llama.cpp under the hood) ──────
-  # Background in vllm-to-sglang-migration-plan.md (broader migration). After
-  # sglang validation showed quality regressions on tools/coding/long-context
-  # vs vLLM, ollama is being evaluated as the more conservative alternative
-  # (Bryan ran it pre-vLLM until 2026-04-25 — `ollama_data` volume kept).
-  # Memory: same constraint as sglang — can't run alongside vllm at full
-  # envelope. Same stop-and-swap workflow during validation.
+  # ── Ollama: dual role ─────────────────────────────────────────────────────
+  # 1) Migration candidate #2 vs sglang (legacy purpose; vllm-to-sglang-
+  #    migration-plan.md). Quality regressions on sglang made ollama the more
+  #    conservative chat-engine alternative for benchmarking.
+  # 2) Embedding host for OpenClaw's `memorySearch` feature (2026-05-04+).
+  #    `nomic-embed-text` (~274 MB; 768-dim) serves /v1/embeddings; the gateway
+  #    reaches it over the bridge as http://ollama:11434/v1. memorySearch
+  #    indexes ~/.openclaw/workspace/memory/*.md so Captain Nemo can do
+  #    in-conversation recall over past journals.
+  # Promoted from manual-lifecycle (`restart: "no"`) to `restart: always`
+  # for the embeddings role. Memory cost is small (~600 MB VRAM resident);
+  # the 27B chat model would still need vllm stopped first if loaded here
+  # for A/B benchmarking.
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
@@ -529,8 +535,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    # Manual lifecycle during validation. Flip to `always` at cutover.
-    restart: "no"
+    # `always` since 2026-05-04 — OpenClaw memorySearch depends on this.
+    restart: always
 
   hermes-agent:
     build: ./hermes-agent
