@@ -489,17 +489,13 @@ services:
     # crashes are visible to the operator. Flip to `always` at cutover.
     restart: "no"
 
-  # ── Ollama: dual role ─────────────────────────────────────────────────────
-  # 1) Migration candidate #2 vs sglang (legacy purpose; vllm-to-sglang-
-  #    migration-plan.md). After sglang quality regressions, ollama is the
-  #    more conservative alternative for the chat path.
-  # 2) Embedding host for gbrain (2026-05-04+). Pulled `nomic-embed-text`
-  #    (~274 MB; 768-dim) and serves it at /v1/embeddings. gbrain reaches it
-  #    over the bridge as http://ollama:11434/v1.
-  # Promoted from manual-lifecycle (`restart: "no"`) to `restart: always` for
-  # the embeddings role — gbrain depends on this being up. Memory cost of the
-  # embed model is small (~600 MB VRAM resident); the 27B chat model would
-  # still need vllm stopped first if we ever load it here for A/B.
+  # ── Migration candidate #2: ollama (GGUF / llama.cpp under the hood) ──────
+  # Background in vllm-to-sglang-migration-plan.md (broader migration). After
+  # sglang validation showed quality regressions on tools/coding/long-context
+  # vs vLLM, ollama is being evaluated as the more conservative alternative
+  # (Bryan ran it pre-vLLM until 2026-04-25 — `ollama_data` volume kept).
+  # Memory: same constraint as sglang — can't run alongside vllm at full
+  # envelope. Same stop-and-swap workflow during validation.
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
@@ -533,8 +529,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    # `always` since 2026-05-04 — gbrain embeddings depend on this being up.
-    restart: always
+    # Manual lifecycle during validation. Flip to `always` at cutover.
+    restart: "no"
 
   hermes-agent:
     build: ./hermes-agent
@@ -682,129 +678,11 @@ services:
               capabilities: [gpu, utility]
     restart: always
 
-  # ── gbrain stack ─────────────────────────────────────────────────────────
-  # Personal knowledge brain (additive to Hindsight). Profile-gated for the
-  # first week. Two services:
-  #   gbrain-postgres — pgvector-enabled Postgres (data store + LISTEN/NOTIFY
-  #                     for the Minions queue + supervisor)
-  #   gbrain          — gbrain CLI / supervisor / stdio MCP host
-  #
-  # Why Postgres instead of the bundled PGLite: PGLite's exclusive file lock
-  # blocks `gbrain jobs supervisor` (multi-process worker), which means no
-  # autonomous `dream` cycle, no Minions queue, no cron skills. Postgres
-  # unlocks the full feature set.
-  #
-  # No published ports on either — gbrain's MCP exposure is stdio only via:
-  #   docker exec -i gbrain gbrain serve
-  # (registered host-side in ~/.claude.json). HTTP + OAuth path is deliberately
-  # disabled in .gbrainrc.
-  #
-  # gbrain pinned to v0.25.1 (pre-OAuth-HTTP-server) — see gbrain/Dockerfile.
-
-  gbrain-postgres:
-    profiles: ["gbrain"]
-    # pgvector/pgvector ships official multi-arch (amd64+arm64) images with
-    # the pgvector extension preinstalled; pg17 matches gbrain's expected
-    # Postgres major (gbrain dev runs on 17.5 per their docs).
-    image: pgvector/pgvector:pg17
-    container_name: gbrain-postgres
-    user: "999:999"
-    volumes:
-      - gbrain_postgres_data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_DB=gbrain
-      - POSTGRES_USER=gbrain
-      - POSTGRES_PASSWORD=${GBRAIN_POSTGRES_PASSWORD:?set GBRAIN_POSTGRES_PASSWORD in .env}
-      # Listen only on the bridge network — no ports: published.
-      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
-      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gbrain -d gbrain"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
-    restart: unless-stopped
-
-
-  gbrain:
-    profiles: ["gbrain"]
-    build: ./gbrain
-    image: gbrain:latest
-    container_name: gbrain
-    user: "1000:1000"
-    volumes:
-      # Brain data lives on the host (its own private git repo, separate
-      # from this hermes-config repo). Bind mount so commits made inside
-      # the container are visible + diffable from the host.
-      - /home/admin/.gbrain:/home/admin/.gbrain
-      # Deploy key for git@github.com:bryantharpe/gbrain-data.git pushes.
-      # Read-only mount; the entrypoint sets GIT_SSH_COMMAND so it's used
-      # without needing chmod inside the container.
-      - /home/admin/.ssh/gbrain_data_deploy_ed25519:/home/admin/.ssh/gbrain_data_deploy_ed25519:ro
-    environment:
-      - BRAIN_DIR=${GBRAIN_BRAIN_DIR:-/home/admin/.gbrain}
-      - BRAIN_REMOTE=${GBRAIN_BRAIN_REMOTE:-git@github.com:bryantharpe/gbrain-data.git}
-      - KEY_PATH=${GBRAIN_DEPLOY_KEY_PATH:-/home/admin/.ssh/gbrain_data_deploy_ed25519}
-      - GIT_USER_NAME=Bryan Tharpe (gbrain)
-      - GIT_USER_EMAIL=bryan.tharpe@gmail.com
-      # Provider routing — gbrain reads these in skills/conventions/model-routing.md.
-      - GBRAIN_EMBEDDING_BASE_URL=${GBRAIN_EMBEDDING_BASE_URL:-http://ollama:11434/v1}
-      - GBRAIN_EMBEDDING_MODEL=${GBRAIN_EMBEDDING_MODEL:-nomic-embed-text}
-      - GBRAIN_EMBEDDING_DIMENSIONS=${GBRAIN_EMBEDDING_DIMENSIONS:-768}
-      - GBRAIN_LLM_BASE_URL=${GBRAIN_LLM_BASE_URL:-http://vllm:8000/v1}
-      - GBRAIN_LLM_MODEL=${GBRAIN_LLM_MODEL:-qwen3.6-27b-int4:128k}
-      - GBRAIN_HEAVY_LLM_BASE_URL=${GBRAIN_HEAVY_LLM_BASE_URL:-https://api.cerebras.ai/v1}
-      - GBRAIN_HEAVY_LLM_MODEL=${GBRAIN_HEAVY_LLM_MODEL:-qwen-3-235b-a22b-instruct-2507}
-      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY:-}
-      # OpenAI-compat env shape — many clients read these specifically.
-      - OPENAI_API_BASE_URL=${GBRAIN_LLM_BASE_URL:-http://vllm:8000/v1}
-      - OPENAI_API_KEY=none
-      # Postgres connection. Format matches what `gbrain init --url ...` accepts.
-      - DATABASE_URL=postgres://gbrain:${GBRAIN_POSTGRES_PASSWORD:?set GBRAIN_POSTGRES_PASSWORD in .env}@gbrain-postgres:5432/gbrain
-      - GBRAIN_DATABASE_URL=postgres://gbrain:${GBRAIN_POSTGRES_PASSWORD:?set GBRAIN_POSTGRES_PASSWORD in .env}@gbrain-postgres:5432/gbrain
-    # Security hardening: drop everything, no privilege escalation, tmpfs for
-    # transient writes (bun + git scratch). The brain dir is the only
-    # writable persistent surface.
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    tmpfs:
-      - /tmp:size=512m,mode=1777
-      - /home/admin/.cache:size=256m,mode=0700,uid=1000,gid=1000
-    depends_on:
-      vllm:
-        condition: service_healthy
-      ollama:
-        condition: service_healthy
-      gbrain-postgres:
-        condition: service_healthy
-    healthcheck:
-      # `gbrain doctor` exits non-zero on half-migrated state or missing config.
-      # `--fast` skips the embeddings probe (which would hammer ollama every
-      # 60s for no benefit). PGLite-mode container stays alive via sleep
-      # infinity (see entrypoint.sh) — this probe is what tells us the
-      # brain is actually queryable, not just that the container is running.
-      test: ["CMD", "gbrain", "doctor", "--fast"]
-      interval: 60s
-      timeout: 15s
-      retries: 3
-      # First boot: bun install runs at build, but the entrypoint clones the
-      # brain-data repo + runs PGLite migrations on first start. ~30s in
-      # practice; allow 5 min as a safety margin.
-      start_period: 300s
-    restart: unless-stopped
-
 volumes:
   # Kept (orphaned) for one-week rollback window after vLLM cutover 2026-04-25.
   # Contains ~tens of GB of pulled Ollama models. `docker volume rm ollama_data`
   # to reclaim once vLLM is proven stable.
   ollama_data:
-  # gbrain Postgres data — backed up nightly via restic→B2 alongside other
-  # Docker volumes. Wipe + re-import from /home/admin/.gbrain/ markdown to
-  # rebuild from scratch.
-  gbrain_postgres_data:
   vllm_hf_cache:
   vllm_compile_cache:
   vllm_test_compile_cache:
