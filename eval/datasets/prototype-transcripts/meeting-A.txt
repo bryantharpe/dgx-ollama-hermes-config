@@ -1,0 +1,36 @@
+[Voice memo, ~3 min, single speaker thinking out loud]
+
+Okay so I keep losing recipes. Like every time I want to make that one
+butternut squash thing I have to dig through three different notes apps and
+half the time I can't remember which one. So I want a small thing — like, not
+a fancy app, just something I can hit on my phone or laptop and find a recipe
+in two clicks.
+
+What I actually need: a way to dump a recipe in. Title, ingredients (just a
+list, not parsed), the actual steps as one big text blob, and some metadata —
+prep time in minutes, cook time in minutes, and a rating from one to five
+stars. That's it. I don't want anything fancy, no nutrition tracking, no meal
+planning, none of that. Just: I have a recipe, save it; I want a recipe, find
+it.
+
+Search has to work. Either by title or by ingredient. Like if I have leftover
+cilantro I want to type "cilantro" and see every recipe that uses it. So
+ingredient search is important.
+
+The other thing — I want to mark which ones I've actually made. Like a "tried
+this" toggle, separate from the rating. Because sometimes I save a recipe
+and never get around to it, and I want to be able to filter to just stuff I've
+actually cooked.
+
+For the UI I just want a list view that shows title, prep time, rating,
+tried/not-tried, and a search bar at the top. Click into one and it shows the
+full recipe with an edit button. Add a new recipe with a button at the top
+right. That's the whole app.
+
+It needs to run locally on the box, no cloud anything. SQLite is fine. I want
+to be able to seed it with a couple of starter recipes so when it boots up
+it's not empty — maybe a basic risotto and a roasted vegetable thing, just so
+I can see it actually works.
+
+Slug should be something like "recipe-keeper" or "recipes". Let's call it
+recipe-keeper.

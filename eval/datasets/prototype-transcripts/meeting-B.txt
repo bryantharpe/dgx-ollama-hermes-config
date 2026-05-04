@@ -1,0 +1,46 @@
+[Standup retrospective, two speakers — A is leading, B is engineer]
+
+A: So we keep saying we're going to track standup updates somewhere and we
+keep not doing it. Can we just build a small dashboard for it? Nothing fancy.
+
+B: Sure, what does it need to do.
+
+A: Each person on the team posts a quick update — what they worked on
+yesterday, what they're working on today, anything blocking them. Three
+fields. And it gets timestamped. Then we want to be able to look back at the
+history.
+
+B: How many people on the team?
+
+A: Right now it's five — me, you, Sam, Priya, Marcus. Just hardcode them as
+options in a dropdown for now, we can make it more flexible later.
+
+A: What I really want is two views. A "today" view that shows everyone's
+update from today, with empty slots for people who haven't posted. So I can
+see at a glance who hasn't checked in. And then a "history" view where I can
+filter by person — like show me everything Marcus has said for the last two
+weeks.
+
+B: Got it. Filter by date range too?
+
+A: Yeah, definitely. A from-date / to-date pair on the history view.
+
+B: What about a chart or something visual? You said dashboard.
+
+A: One simple chart would be nice — number of updates per day across the
+whole team, just to see if participation is dropping off. A bar chart, last
+30 days, nothing fancy. The chart can be on the today page, like at the top.
+
+B: SQLite for storage?
+
+A: Yeah, all local. I want this running on the box. The "today" view should
+auto-refresh, like every minute or so, so I don't have to keep reloading.
+
+B: Edit/delete on past updates?
+
+A: Just delete, no edit. If you mistype, delete and re-post. Keeps the
+schema simpler.
+
+A: Slug — let's call it standup-tracker. And seed it with a couple of
+example updates from yesterday and today, so when it starts up it's not
+totally blank.
