@@ -8,6 +8,12 @@
 *.pfx
 secrets/
 credentials.json
+# Eval-only secret bundles — sourced by the eval harness, kept out of
+# bashrc to avoid Claude Code's auth conflict with Max-plan OAuth.
+.eval-keys
+eval-keys
+*.eval-keys
+*-keys
 
 # Generated/cached hashes
 *.hash
@@ -80,3 +86,9 @@ workspace/
 # Prototype harness runtime state (allocated ports, locks)
 prototypes/.registry/ports.json
 prototypes/.registry/.lock
+
+# vLLM 0.19+ NVFP4 build (Phase 1+): upstream recipe clone and build logs.
+# Image tarballs land under dgx-spark-vllm/backups/ which `backups/` above
+# already catches.
+dgx-spark-vllm/upstream/
+dgx-spark-vllm/build-logs/

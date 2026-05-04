@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Pre-commit hook: refuse to commit if any STAGED file contains a known
+# API-key-shaped string. Catches the common foot-gun of pasting a key
+# into a README, dotenv-example, docstring, etc.
+#
+# Patterns covered:
+#   sk-ant-...        Anthropic
+#   sk-or-v1-...      OpenRouter
+#   sk-proj-...       OpenAI project keys
+#   sk-[40+ chars]    OpenAI legacy
+#   AKIA[0-9A-Z]{16}  AWS access key id (long-tail safety)
+#
+# To skip in an emergency (DO NOT make a habit of this):
+#   git commit --no-verify
+#
+# Hook is installed by scripts/install-git-hooks.sh; reinstall after a
+# fresh clone.
+
+set -uo pipefail
+
+# Patterns — extended-regex
+PATTERNS=(
+  'sk-ant-(api03|admin01|sid01)-[A-Za-z0-9_-]{40,}'
+  'sk-or-v1-[A-Za-z0-9]{40,}'
+  'sk-proj-[A-Za-z0-9_-]{20,}'
+  'sk-[A-Za-z0-9]{40,}'
+  'AKIA[0-9A-Z]{16}'
+)
+
+# Files staged for commit (added, copied, modified, renamed)
+mapfile -t STAGED < <(git diff --cached --name-only --diff-filter=ACMR)
+[ ${#STAGED[@]} -eq 0 ] && exit 0
+
+leaks=0
+for f in "${STAGED[@]}"; do
+  # Skip binary files (git diff -p shows them as "Binary files ... differ")
+  [ -f "$f" ] || continue
+  # Build a single grep over the staged blob (not the working tree, in case
+  # the user has staged a partial file)
+  blob=$(git diff --cached --no-color -- "$f" | sed -n 's/^+//p')
+  for pat in "${PATTERNS[@]}"; do
+    matches=$(printf '%s\n' "$blob" | grep -aEo "$pat" | head -3 || true)
+    if [ -n "$matches" ]; then
+      echo "ERROR: staged file '$f' contains an apparent API-key-shaped string:" >&2
+      # Redact aggressively — show only the first 12 chars (provider/scope
+      # prefix) so the user can spot the leak without the key landing in
+      # logs or chat history.
+      printf '  %s\n' "$matches" | sed 's/\(.\{12\}\).*/\1...<REDACTED>/' >&2
+      leaks=$((leaks + 1))
+    fi
+  done
+done
+
+if [ "$leaks" -gt 0 ]; then
+  echo "" >&2
+  echo "Refusing to commit: $leaks file(s) contain API-key-shaped strings." >&2
+  echo "If this is a false positive, prove it (test fixture? snippet of docs?)" >&2
+  echo "and bypass once with:  git commit --no-verify" >&2
+  exit 1
+fi
+
+exit 0
