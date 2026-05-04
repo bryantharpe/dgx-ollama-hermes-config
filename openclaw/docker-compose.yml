@@ -41,6 +41,13 @@ services:
       HINDSIGHT_API_URL: ${HINDSIGHT_API_URL:-}
       HINDSIGHT_API_TENANT_API_KEY: ${HINDSIGHT_API_TENANT_API_KEY:-}
       HINDSIGHT_BANK_ID: ${HINDSIGHT_BANK_ID:-bryan-default}
+      # mcporter — npm-installed under /home/node/.npm-global so UID 1000
+      # owns it (no root needed). PATH override puts the bundled openclaw
+      # `mcporter` skill on PATH so the skill loader's `bins: [mcporter]`
+      # check passes. NPM_CONFIG_PREFIX makes future `npm install -g` writes
+      # land in the persistent volume too.
+      NPM_CONFIG_PREFIX: /home/node/.npm-global
+      PATH: /home/node/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     volumes:
       - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
@@ -60,6 +67,13 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /usr/bin/docker:/usr/bin/docker:ro
       - /usr/libexec/docker/cli-plugins/docker-compose:/usr/libexec/docker/cli-plugins/docker-compose:ro
+      # mcporter persistence — npm globals + mcporter config (which holds
+      # the Hindsight bearer token in a server entry) survive container
+      # recreations. Re-installing mcporter or re-adding the hindsight
+      # entry is one command in the entrypoint hot-path docs if these
+      # volumes are wiped.
+      - openclaw_npm_global:/home/node/.npm-global
+      - openclaw_mcporter:/home/node/.mcporter
     ports:
       - "127.0.0.1:${OPENCLAW_GATEWAY_PORT:-18789}:18789"
       - "127.0.0.1:${OPENCLAW_BRIDGE_PORT:-18790}:18790"
@@ -184,3 +198,9 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
+  # mcporter install dir + per-server config (incl. hindsight bearer entry).
+  # Tear-down: `docker volume rm openclaw_openclaw_npm_global openclaw_openclaw_mcporter`
+  # then reinstall via `docker exec openclaw-gateway sh -c 'npm install -g mcporter'`
+  # plus the `mcporter config add hindsight ...` command from gbrain/README docs.
+  openclaw_npm_global:
+  openclaw_mcporter:
