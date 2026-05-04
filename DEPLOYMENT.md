@@ -92,6 +92,63 @@ Must return a non-null `tool_calls` array. If it returns raw text or a 400, the 
 - **Role**: Secure storage for sensitive API keys and credentials.
 - **Status**: Currently running in Dev Mode with `VAULT_DEV_ROOT_TOKEN_ID=root`.
 
+### 5. gbrain (personal knowledge brain)
+
+Additive to Hindsight, not a replacement. Hindsight = episodic session memory; gbrain = curated semantic knowledge (people, companies, meetings, articles, books). See `gbrain/README.md` for full operations doc.
+
+Two services:
+
+- **`gbrain-postgres`**: `pgvector/pgvector:pg17`, no published ports, `gbrain_postgres_data` volume (restic-backed nightly). Stores the brain (pages, embeddings, knowledge graph, Minions queue, supervisor state). Local-only; no cloud DB.
+- **`gbrain`**: built from `./gbrain`, pinned to `garrytan/gbrain` SHA `c2ae4dbfc58d` = v0.25.1 (deliberately pre-OAuth-HTTP-server). Runs `gbrain jobs supervisor` as the long-running command — the canonical worker that handles the dream cycle, Minions queue, and durable agent runs.
+
+Common attributes:
+
+- **Profile**: `gbrain` — does **not** auto-start with `docker compose up -d`. Explicit start with `docker compose --profile gbrain up -d gbrain`. Drop the profile gate after baseline stability.
+- **Ports**: none. MCP exposure is stdio-only via `docker exec -i gbrain gbrain serve` (registered host-side via `claude mcp add` in `~/.claude.json`).
+- **Brain markdown location**: `/home/admin/.gbrain/` on the host — its **own private git repo**, separate from this hermes-config repo. Remote is `git@github.com:bryantharpe/gbrain-data.git` (private). Auto-pushes after every commit via the `post-commit` hook installed by the entrypoint.
+- **Deploy key**: `/home/admin/.ssh/gbrain_data_deploy_ed25519` (private, mode 600). Public half registered as a write-enabled deploy key on the `gbrain-data` repo.
+- **Local-providers patch**: `gbrain/Dockerfile` applies build-time sed patches because gbrain v0.25.1 hardcodes the OpenAI client (no `baseURL`), the `text-embedding-3-large` model name, and `vector(1536)` schema. Patches make all three env-driven so we can route to local ollama at 768 dims. See `gbrain/README.md` § "Local-providers patch".
+- **Providers** (minimum cloud egress):
+  - Embeddings → `http://ollama:11434/v1` (`nomic-embed-text`, local)
+  - Routine LLM → `http://vllm:8000/v1` (`qwen3.6-27b-int4:128k`, local)
+  - Heavy synthesis → `https://api.cerebras.ai/v1` (`qwen-3-235b-a22b-instruct-2507`, free tier — same override Hindsight uses)
+- **Disabled at install**: HTTP MCP, OAuth, ngrok, Twilio, Gmail, Calendar, Twitter, Perplexity, Groq audio, archive-crawler. No skillpacks installed by default — `gbrain skillpack install <name>` is opt-in.
+
+#### Enable / disable / rollback
+
+```bash
+# enable for the first time (after deploy key registered + GBRAIN_POSTGRES_PASSWORD set)
+docker compose --profile gbrain up -d gbrain-postgres
+docker compose --profile gbrain up -d gbrain
+
+# pause without deleting (both services)
+docker compose --profile gbrain stop gbrain gbrain-postgres
+
+# remove containers, keep all data (Postgres volume + brain dir survive)
+docker compose --profile gbrain rm -sf gbrain gbrain-postgres
+
+# full nuke (also wipes local brain markdown — remote retains pushed commits)
+docker compose --profile gbrain rm -sf gbrain gbrain-postgres
+docker volume rm hermes-config_gbrain_postgres_data
+rm -rf /home/admin/.gbrain
+```
+
+Independent recovery paths:
+- **Postgres volume**: backed up nightly via restic→B2 alongside other Docker volumes. `scripts/restore.sh volume hermes-config_gbrain_postgres_data` to restore.
+- **Markdown source**: in the `gbrain-data` GitHub remote. `git clone git@github.com:bryantharpe/gbrain-data.git /home/admin/.gbrain` to recover, then `gbrain import` to repopulate the Postgres index from the markdown.
+
+#### MCP from Claude Code
+
+Add to `~/.claude/server.json`:
+
+```json
+{
+  "mcpServers": {
+    "gbrain": { "command": "docker", "args": ["exec", "-i", "gbrain", "gbrain", "serve"] }
+  }
+}
+```
+
 ---
 
 ## Network Configuration

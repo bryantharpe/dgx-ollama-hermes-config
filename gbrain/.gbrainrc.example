@@ -1,0 +1,52 @@
+# gbrain runtime configuration template.
+#
+# Copy to ~/.gbrain/.gbrainrc on the host (or let `gbrain init` generate it
+# during the agent-install protocol — we override the relevant fields here).
+#
+# Provider routing for our minimal-exposure deployment:
+#   - Embeddings:        ollama (local, nomic-embed-text)
+#   - Routine LLM calls: vllm  (local, qwen3.6-27b-int4)
+#   - Heavy synthesis:   cerebras (cloud, qwen-3-235b — accepted override)
+#   - Audio (Groq):      DISABLED
+#   - Web (Perplexity):  DISABLED
+
+# ── Embeddings ───────────────────────────────────────────────────────────
+embedding_provider: openai-compat
+embedding_base_url: http://ollama:11434/v1
+embedding_api_key:  none
+embedding_model:    nomic-embed-text
+embedding_dim:      768
+
+# ── Default LLM (multi-query expansion, classifiers, light synthesis) ────
+llm_provider:  openai-compat
+llm_base_url:  http://vllm:8000/v1
+llm_api_key:   none
+llm_model:     qwen3.6-27b-int4:128k
+
+# ── Heavy synthesis tier (book-mirror, dream cycles) ─────────────────────
+heavy_llm_provider:  openai-compat
+heavy_llm_base_url:  https://api.cerebras.ai/v1
+# CEREBRAS_API_KEY is already in ~/.openclaw/.env; bootstrap script reads it.
+heavy_llm_api_key:   ${CEREBRAS_API_KEY}
+heavy_llm_model:     qwen-3-235b-a22b-instruct-2507
+# Cerebras free tier rate limit guard — same value Hindsight uses.
+heavy_llm_max_concurrent: 1
+
+# ── Disabled providers (fenced; do not configure secrets here) ───────────
+groq_disabled:        true
+perplexity_disabled:  true
+twilio_disabled:      true
+gmail_disabled:       true
+calendar_disabled:    true
+twitter_disabled:     true
+
+# ── archive-crawler safety fence (gbrain refuses to run it without paths) ─
+# Leave scan_paths unset on purpose. Add later only if/when needed.
+archive_crawler:
+  scan_paths: []
+
+# ── MCP transport ────────────────────────────────────────────────────────
+# stdio only. Do not enable http_server. Re-evaluate behind Tailscale only.
+mcp:
+  stdio_enabled: true
+  http_enabled:  false

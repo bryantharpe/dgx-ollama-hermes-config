@@ -100,6 +100,7 @@ The **primary chat path** is `Browser → openclaw-caddy → openclaw-gateway �
 | **prototype-seeder** | `127.0.0.1:8081` | `prototype-seeder:latest` | Copies `prototypes/_template/` into a slug dir, allocates a port from `.registry/ports.json`. Phase 6 decommission — replaced by `prototypes.allocate` in the openclaw-prototypes plugin. |
 | **vault** | `127.0.0.1:8200` | `hashicorp/vault` | Dev-mode secret storage for the legacy hermes-agent. |
 | **netdata** | `0.0.0.0:19999` | `netdata/netdata` | Lightweight host + container metrics for the LAN. |
+| **gbrain** | (no ports — stdio MCP) | `gbrain:latest` (built locally; pinned to `garrytan/gbrain` SHA `c2ae4dbfc58d`) | Personal knowledge brain (additive to Hindsight). Profile-gated (`--profile gbrain`). Brain data at `/home/admin/.gbrain/` ↔ private `bryantharpe/gbrain-data` repo. See `gbrain/README.md`. |
 
 ## Ingress
 
@@ -196,3 +197,4 @@ Host dgx-spark
 - **`eval-harness-plan.md`** — architecture + decision rationale for the eval harness in `eval/`
 - **`vllm-to-sglang-migration-plan.md`** — why the sglang sidecar exists and what would be involved in a full cutover
 - **`dgx-spark-vllm/README.md`** — local vLLM 0.19+ NVFP4 build pipeline (R&D, not yet wired into the running stack)
+- **`gbrain/README.md`** — gbrain deployment, lifecycle, MCP wiring, troubleshooting
