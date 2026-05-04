@@ -12,7 +12,7 @@ flowchart TD
     SSH["SSH Tunnel<br/>(Port 8080)"]
     WebUI["Open WebUI<br/>(Docker: 8080)"]
     Hermes["Hermes Agent<br/>(Docker: 8642)"]
-    vLLM["vLLM<br/>(Docker: 8000)<br/>Qwen3.6-35B-A3B-FP8"]
+    vLLM["vLLM<br/>(Docker: 8000)<br/>Intel/Qwen3.6-27B-int4-AutoRound + MTP=2"]
     Vault["HashiCorp Vault<br/>(Docker: 8200)"]
 
     Browser --> SSH
@@ -27,22 +27,29 @@ flowchart TD
 
 ### 1. vLLM
 - **Container Name**: `vllm`
-- **Image**: `scitrera/dgx-spark-vllm:0.14.1-t4` (vLLM 0.14.1 + Transformers 4.57.6 + PyTorch 2.10.0 + CUDA 13.1.0 + FlashInfer 0.6.2, pre-built for ARM64 + GB10 Blackwell SM_120). The vanilla `vllm/vllm-openai` image is x86_64 only and **will not work** on DGX Spark.
+- **Image**: `scitrera/dgx-spark-vllm:0.17.0-t5` (vLLM 0.17.1.dev0 + Transformers 5.x + PyTorch + CUDA 13.1 + FlashInfer 0.6.2, pre-built for ARM64 + GB10 Blackwell SM_120). The vanilla `vllm/vllm-openai` image is x86_64 only and **will not work** on DGX Spark. The scitrera vLLM track has been stalled at this image since 2026-03-08; their sglang track is more active and runs in parallel as a sidecar — see `vllm-to-sglang-migration-plan.md` and the local NVFP4 build pipeline at `dgx-spark-vllm/` for the longer-term alternatives.
 - **Port**: `8000` inside the container; published on the host as `0.0.0.0:8001:8000` (host port 8001 because 8000 is held by an unrelated prototype). Inter-container URL is `http://vllm:8000/v1`; from the DGX host use `http://127.0.0.1:8001/v1`; from the LAN use `http://192.168.10.80:8001/v1`. **vLLM has no built-in auth** — the LAN bind implicitly trusts the LAN. To gate it, switch the publish back to `127.0.0.1:8001:8000` and front it with the existing openclaw Caddy (which already terminates TLS on `192.168.10.80:443`).
-- **Model served**: `Qwen/Qwen3.6-35B-A3B-FP8` — the official Qwen build with BF16 + F8_E4M3 safetensors, MoE (256 experts, 8 routed + 1 shared per token). Hits the GB10 FP8 tensor cores natively.
-- **Multi-aliased served-model-name**: `qwen3.6-35b:128k`, `qwen3.6:35b-a3b-q8_0`, `qwen3.6-35b-a3b:q6-65k`, `hermes-orchestrator:qwen3.6-128k` — every name existing clients send resolves to the same backend, so `LLM_MODEL` env vars and provider configs did not need to change at the model level.
-- **First boot**: downloads ~37 GB from HuggingFace and compiles CUDA graphs. Plan for **8–15 minutes** before `/health` returns 200. The compose healthcheck uses `start_period: 900s` to cover this.
+- **Model served**: `Intel/Qwen3.6-27B-int4-AutoRound` — Intel's AutoRound INT4 quant of Qwen3.6-27B dense + an `qwen3_next_mtp` MTP draft head preserved through the quant. ~14–18 GB on disk; 1.55× decode-rate over INT4-alone with MTP=2.
+- **Single canonical served-model-name**: `qwen3.6-27b-int4:128k`. The previous multi-alias setup was consolidated to one alias on 2026-04-28 (commit `6d88cbc`); all downstream client configs (`hermes-agent` `LLM_MODEL`, `opencode/opencode.json`, `~/.openclaw/openclaw.json`) reference this exact string. Adding a new alias requires a coordinated client + vllm change.
+- **First boot**: downloads ~14 GB from HuggingFace and compiles CUDA graphs (MTP adds an extra capture pass). Plan for **8–15 minutes** before `/health` returns 200. The compose healthcheck uses `start_period: 900s` to cover this. Subsequent boots reuse `vllm_hf_cache` + `vllm_compile_cache` (~5–7 min).
 
 #### vLLM serve flags — what each one buys you
 
 | Flag | Why |
 |------|-----|
-| `--max-model-len 131072` | Matches the prior Ollama `OLLAMA_CONTEXT_LENGTH`. Qwen3.6 supports 262K natively (1M with YaRN); raise this if you want more. |
+| `--max-model-len 262144` | Native context for Qwen3.6 family. INT4 weights are ~14 GB and FP8 KV cache at 262k context fits in 128 GB unified at `--gpu-memory-utilization=0.75`. Drop to 131072 if memory ever tightens. |
 | `--gpu-memory-utilization 0.75` | DGX Spark's 128 GB is **unified memory** shared with the Grace CPU, OS, and any other containers. The vLLM default of 0.9 overcommits; 0.75 (~91 GB target) is the right setting when no other heavy GPU workloads are loaded. If you boot ComfyUI or another container that holds tens of GB resident, vllm will crash-loop with `ValueError: Free memory on device cuda:0 (X/121.69 GiB) on startup is less than desired GPU memory utilization` — either stop the other container, or drop this to 0.55 + `--max-model-len 32768`. |
-| `--reasoning-parser qwen3` | Splits `<think>...</think>` into the OpenAI `reasoning_content` field cleanly. |
+| `--kv-cache-dtype fp8` | Halves attention memory at negligible quality loss. |
+| `--enable-prefix-caching` | KV cache reuse across requests sharing a system-prompt prefix — big win for openclaw's long bootstrap context. |
+| `--enable-chunked-prefill` + `--max-num-batched-tokens 16384` | Long prefills interleave with decode so short queries don't stall behind a 200k-token prompt. |
+| `--max-num-seqs 4` | Right-sized concurrency for single-user interactive use. |
+| `--reasoning-parser qwen3` | Splits `<think>...</think>` into the OpenAI `reasoning_content` field cleanly. **Required** for the 27B-INT4: this model's chat template (custom-mounted at `/etc/vllm/qwen3.6-27b.jinja`) defaults `enable_thinking=false`, so the parser is a no-op for routine traffic but correctly extracts reasoning when openclaw passes `chat_template_kwargs={"enable_thinking":true}` per request. ⚠️ If you swap to a model whose template ships zero thinking plumbing (e.g. Qwen/Qwen3-Coder-Next-FP8), this flag mis-classifies all output as reasoning and the OpenAI response comes back with `content: null` AND `reasoning_content: null` — drop it for those models. |
+| `--chat-template /etc/vllm/qwen3.6-27b.jinja` | Custom template with `enable_thinking` flipped default-OFF. Without it, the 27B reasons indefinitely on small orchestration tasks. |
 | `--enable-auto-tool-choice` | Required when any client sends `tool_choice: "auto"` (hermes-agent, opencode, OpenClaw all do). |
-| `--tool-call-parser qwen3_coder` | **Critical.** The `hermes` parser returns HTTP 400 on `tool_choice=auto` for this model family — see NVIDIA forum thread `362784` ("vLLM returns 400 error for tool_choice='auto' when called from OpenClaw (Qwen3.5-35B on NVIDIA Spark GB10)"). Qwen's HF model card explicitly specifies `qwen3_coder`. |
-| `--language-model-only` | Qwen3.6-35B-A3B-FP8 ships with a vision encoder that we don't use. Skipping saves ~3 GB and startup time. |
+| `--tool-call-parser qwen3_coder` | **Critical.** The `hermes` parser returns HTTP 400 on `tool_choice=auto` for this model family — see NVIDIA forum thread `362784`. Qwen's HF model card explicitly specifies `qwen3_coder`. |
+| `--language-model-only` | Skips the model's vision tower (none of our clients use it; saves ~3 GB and startup time). |
+| `--speculative-config={"method":"qwen3_next_mtp","num_speculative_tokens":2}` | MTP speculative decoding via the draft head Intel's AutoRound preserved from upstream. Measured 1.55× over INT4-alone in Phase 1 perf bench. =2 chosen per Intel's model card; =3 yields diminishing returns. |
+| `--served-model-name qwen3.6-27b-int4:128k` | Single canonical alias — see model section above. |
 
 #### Tool-calling sanity check after deploy
 
@@ -50,14 +57,15 @@ flowchart TD
 curl -s http://127.0.0.1:8001/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model":"qwen3.6-35b:128k",
+    "model":"qwen3.6-27b-int4:128k",
     "messages":[{"role":"user","content":"What is the weather in Paris?"}],
     "tools":[{"type":"function","function":{"name":"get_weather","parameters":{"type":"object","properties":{"city":{"type":"string"}}}}}],
-    "tool_choice":"auto"
+    "tool_choice":"auto",
+    "chat_template_kwargs":{"enable_thinking":false}
   }' | jq '.choices[0].message.tool_calls'
 ```
 
-Must return a non-null `tool_calls` array. If it returns raw text or a 400, the parser flag is wrong.
+Must return a non-null `tool_calls` array. If it returns raw text or a 400, the parser flag is wrong. (The `chat_template_kwargs.enable_thinking=false` line matches what openclaw passes per request, so this curl mirrors a real call shape.)
 
 ### 2. Hermes Agent
 - **Container Name**: `hermes-agent`
@@ -231,7 +239,7 @@ Sanity-check the tool-call surface end-to-end with the curl from the vLLM servic
 ### No models in dropdown
 1. Check the **Admin Settings > Connections** in Open WebUI.
 2. Verify the **OpenAI API** URLs are `http://hermes-agent:8642/v1` (key = `HERMES_API_KEY`) AND `http://vllm:8000/v1` (key = `none`). Open WebUI accepts both via the `OPENAI_API_BASE_URLS` semicolon-separated form.
-3. `curl http://127.0.0.1:8001/v1/models | jq '.data[].id'` should list all four served-model-name aliases.
+3. `curl http://127.0.0.1:8001/v1/models | jq '.data[].id'` should list `qwen3.6-27b-int4:128k` (single canonical alias).
 
 ### Resetting Password
 If you forget your admin password, you can reset it via the database inside the container:
