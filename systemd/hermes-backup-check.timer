@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly restic check
+Requires=hermes-backup-check.service
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00
+RandomizedDelaySec=10min
+Persistent=true
+Unit=hermes-backup-check.service
+
+[Install]
+WantedBy=timers.target

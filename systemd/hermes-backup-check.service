@@ -1,0 +1,15 @@
+[Unit]
+Description=Weekly restic repo integrity check (read-data-subset=5%)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+Group=admin
+EnvironmentFile=/home/admin/code/hermes-config/.env.backup
+ExecStart=/usr/local/bin/restic --option b2.connections=4 check --read-data-subset=5%%
+TimeoutStartSec=4h
+
+[Install]
+WantedBy=multi-user.target

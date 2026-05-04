@@ -1,0 +1,61 @@
+# restic exclude patterns. One per line. Updated as we trim scope over time.
+
+# System pseudo-fs and temp
+/proc
+/sys
+/dev
+/run
+/tmp
+/var/tmp
+/var/cache
+/var/log
+
+# Docker — keep /var/lib/docker/volumes (stateful), skip layer/image storage
+/var/lib/docker/overlay2
+/var/lib/docker/containers
+/var/lib/docker/image
+/var/lib/docker/buildkit
+/var/lib/docker/network
+/var/lib/docker/plugins
+/var/lib/docker/runtimes
+/var/lib/docker/swarm
+/var/lib/docker/tmp
+/var/lib/docker/trust
+
+# User-level caches (regenerable)
+/home/*/.cache
+/home/*/.npm
+/home/*/.nvm/.cache
+/home/*/.vscode-server
+/home/*/.cursor-server
+/home/*/.local/share/Trash
+/home/*/snap/*/common/.cache
+/root/.cache
+/root/.npm
+
+# GPU/torch compile caches (regenerable, often hardware-specific)
+**/vllm_compile_cache
+**/sglang_compile_cache
+**/.torchinductor_cache
+**/.cache/torch_compile
+
+# Build/dev caches
+**/__pycache__
+**/.venv
+**/venv
+**/node_modules
+**/.next/cache
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# OS detritus
+**/.DS_Store
+**/Thumbs.db
+**/*.tmp
+**/*.swp
+**/*.swo
+
+# Lost+found
+/lost+found
+**/lost+found

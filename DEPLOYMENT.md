@@ -135,6 +135,82 @@ Then visit **[http://localhost:8080](http://localhost:8080)** in your browser.
 
 > **Note**: If you get an `ERR_SSL_PROTOCOL_ERROR`, ensure you are using `http://` and not `https://`. Using `http://127.0.0.1:8080` instead of `localhost` can also help bypass browser-forced HTTPS.
 
+## Backup & Restore
+
+Off-host backups go to **Backblaze B2** via **restic** (client-side encrypted, deduplicated). Established 2026-05-03; first full snapshot landed `4d0c29d8`.
+
+### What's where
+
+| | |
+|---|---|
+| Tool | `restic` 0.18.1 at `/usr/local/bin/restic` (installed by `scripts/install-restic.sh`) |
+| Repo | `b2:tharpe-dgx-spark:dgx-spark` (Backblaze B2, private bucket, SSE-B2, lifecycle "keep only the last version") |
+| Credentials | `.env.backup` (gitignored, mode 600) — `B2_ACCOUNT_ID`, `B2_ACCOUNT_KEY`, `B2_BUCKET`, `RESTIC_REPOSITORY`, `RESTIC_PASSWORD` |
+| Sudo grant | `/etc/sudoers.d/restic-backup` — `admin ALL=(root) NOPASSWD: SETENV: /usr/local/bin/restic` |
+| Excludes | `scripts/excludes.txt` — system pseudo-fs, regenerable caches, build artifacts |
+| Log | `.backup.log` (admin-owned, append-only) |
+
+The restic password is **not recoverable** if lost — Backblaze cannot decrypt the repo. Keep at minimum two offline copies (password manager + paper/USB).
+
+### Source paths covered
+
+`/home`, `/etc`, `/usr/local`, `/root`, `/var/lib/docker/volumes` — everything stateful. Docker image/layer storage (`/var/lib/docker/{overlay2,containers,image,...}`) is excluded since images come from registries and ephemeral state isn't data.
+
+### Schedule
+
+Three systemd timers, installed by `scripts/install-backup-timers.sh`. Verify with `systemctl list-timers 'hermes-backup*'`.
+
+| Timer | When | Service |
+|---|---|---|
+| `hermes-backup.timer` | daily 03:00 UTC | full incremental snapshot |
+| `hermes-backup-check.timer` | weekly Sun 04:00 UTC | `restic check --read-data-subset=5%` |
+| `hermes-backup-prune.timer` | monthly 1st 05:00 UTC | `restic forget --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --keep-yearly 3 --prune` |
+
+All `Persistent=true` so missed firings catch up on next boot.
+
+### Restoring
+
+Use `scripts/restore.sh`:
+
+```bash
+scripts/restore.sh list                              # list snapshots
+scripts/restore.sh list <snap-id>                    # list files in a snapshot
+scripts/restore.sh file <abs-path> [snap]            # → /tmp/restic-restore-<ts>/<path>
+scripts/restore.sh volume <docker-vol-name> [snap]   # restore in place; prompts
+scripts/restore.sh system [snap]                     # full restore to / ; YES gate
+```
+
+`snap` defaults to `latest`. The wrapper handles the B2 cold-connection retry pattern (first attempt often hits `context deadline exceeded`; retries usually succeed on attempt 2).
+
+**Bare-metal recovery on a fresh DGX Spark:**
+
+1. Stock OS install + nvidia drivers (`bootstrap.sh`)
+2. `git clone <hermes-config-remote> ~/code/hermes-config`
+3. Drop B2 creds + `RESTIC_PASSWORD` into `~/code/hermes-config/.env.backup` (the only thing not recoverable from git; comes from your password manager)
+4. `bash ~/code/hermes-config/scripts/install-restic.sh`
+5. Add the sudoers entry: `echo 'admin ALL=(root) NOPASSWD: SETENV: /usr/local/bin/restic' | sudo tee /etc/sudoers.d/restic-backup && sudo chmod 440 /etc/sudoers.d/restic-backup`
+6. `bash ~/code/hermes-config/scripts/restore.sh system`
+7. Reboot, then `bash ~/code/hermes-config/scripts/install-backup-timers.sh` to re-arm the schedule
+
+The repo + four credential values are sufficient to fully reconstitute the host.
+
+### Manual ops
+
+```bash
+# ad-hoc backup (same logic as the daily timer)
+scripts/backup.sh
+scripts/backup.sh --dry-run                          # estimate-only
+
+# inspect
+. .env.backup && restic --no-lock snapshots
+. .env.backup && restic --no-lock stats --mode raw-data
+
+# rotate the B2 application key
+# 1) generate a new app key in the B2 console (scoped to this bucket)
+# 2) update B2_ACCOUNT_ID + B2_ACCOUNT_KEY in .env.backup
+# 3) delete the old key in the B2 console
+```
+
 ## Troubleshooting
 
 ### Build agent silently queues but never executes

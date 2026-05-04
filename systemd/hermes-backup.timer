@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily Hermes off-host backup
+Requires=hermes-backup.service
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=10min
+Persistent=true
+Unit=hermes-backup.service
+
+[Install]
+WantedBy=timers.target

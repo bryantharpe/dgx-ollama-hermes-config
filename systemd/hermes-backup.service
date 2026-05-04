@@ -1,0 +1,19 @@
+[Unit]
+Description=Hermes nightly off-host backup to Backblaze B2 (restic)
+Documentation=file:///home/admin/code/hermes-config/scripts/backup.sh
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=admin
+Group=admin
+EnvironmentFile=/home/admin/code/hermes-config/.env.backup
+ExecStart=/home/admin/code/hermes-config/scripts/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=24h
+
+[Install]
+WantedBy=multi-user.target
