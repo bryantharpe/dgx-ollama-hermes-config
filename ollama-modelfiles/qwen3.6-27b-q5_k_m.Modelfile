@@ -1,0 +1,63 @@
+# FROM is a direct blob path because `ollama pull
+# hf.co/bartowski/Qwen_Qwen3.6-27B-GGUF:Q5_K_M` consistently fails on the
+# manifest-commit step ("context deadline exceeded") even though both
+# blobs (20 GB GGUF + 927 MB tokenizer/template) reach 100%. Pointing at
+# the cached blob directly bypasses the broken manifest write.
+# Same pattern as Modelfile.qwen3-coder-next-q5-131k.
+FROM /root/.ollama/models/blobs/sha256-58f6478050bb6a07f79d183d9f271c42d1b6aaa01768cbe5338d9c4700933459
+
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|endoftext|>"
+PARAMETER temperature 0
+PARAMETER num_ctx 262144
+
+# Qwen3 ChatML template with tool-call support. Adapted from ollama's
+# canonical qwen3 template (the bare bartowski GGUF doesn't declare
+# tool-call capability, so we add it explicitly here so ollama sets the
+# `tools` capability — verify with `ollama show <tag>` after creation).
+TEMPLATE """{{- if or .System .Tools }}<|im_start|>system
+{{- if .System }}
+{{ .System }}
+{{- end }}
+{{- if .Tools }}
+
+# Tools
+
+You may call one or more functions to assist the user query.
+
+You are provided with function signatures within <tools></tools> XML tags:
+<tools>
+{{- range .Tools }}
+{"type": "function", "function": {{ .Function }}}
+{{- end }}
+</tools>
+
+For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:
+<tool_call>
+{"name": <function-name>, "arguments": <args-json-object>}
+</tool_call>
+{{- end }}<|im_end|>
+{{ end }}
+{{- range $i, $_ := .Messages }}
+{{- $last := eq (len (slice $.Messages $i)) 1 -}}
+{{- if eq .Role "user" }}<|im_start|>user
+{{ .Content }}<|im_end|>
+{{ else if eq .Role "assistant" }}<|im_start|>assistant
+{{- if .Content }}
+{{ .Content }}
+{{- else if .ToolCalls }}
+<tool_call>
+{{- range .ToolCalls }}
+{"name": "{{ .Function.Name }}", "arguments": {{ .Function.Arguments }}}
+{{- end }}
+</tool_call>
+{{- end }}{{ if not $last }}<|im_end|>
+{{ end }}
+{{- else if eq .Role "tool" }}<|im_start|>user
+<tool_response>
+{{ .Content }}
+</tool_response><|im_end|>
+{{ end }}
+{{- if and (ne .Role "assistant") $last }}<|im_start|>assistant
+{{ end }}
+{{- end }}"""

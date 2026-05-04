@@ -519,15 +519,30 @@ services:
       # Keep models loaded across requests (ollama defaults to ~5min unload).
       # Eval harness sends bursts of requests with idle gaps between probes.
       - OLLAMA_KEEP_ALIVE=24h
+      # 2026-05-04 — q8_0 KV cache halves memory vs default f16 at negligible
+      # quality loss, letting Q5_K_M @ 262144 ctx fit fully on GPU instead
+      # of spilling 23 layers to CPU. FLASH_ATTENTION=1 is required for any
+      # non-f16 KV cache type; it's defaulted on in 0.21.2 but make it
+      # explicit so a future ollama upgrade doesn't silently break this.
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      - OLLAMA_FLASH_ATTENTION=1
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # 2026-05-04 — switched from `deploy.resources.reservations.devices`
+    # (legacy nvidia-container-runtime path) to CDI direct injection.
+    # The legacy path doesn't run the CDI hook that creates the symlinks
+    # NVML needs to initialize on this Spark + nvidia-ctk 1.19.0 + cgroup v2
+    # + systemd-cgroup-driver combo, leading to "Failed to initialize NVML:
+    # Unknown Error" inside the container even though /dev/nvidia* nodes
+    # ARE mounted. CDI injection (`nvidia.com/gpu=all`) routes through the
+    # CDI spec at /etc/cdi/nvidia.yaml and runs `nvidia-cdi-hook
+    # create-symlinks` at container creation. Verified on this host: ad-hoc
+    # `docker run --device=nvidia.com/gpu=all nvidia/cuda:13.0.0-base
+    # nvidia-smi` returns the GB10 cleanly. vLLM stays on the legacy path
+    # because its scitrera image bundles enough lib paths to work without
+    # the CDI hook — leaving its `deploy:` block alone keeps that working.
+    devices:
+      - "nvidia.com/gpu=all"
     healthcheck:
       # Ollama exposes /api/tags as a no-op list endpoint; ~ 1ms response.
       test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
