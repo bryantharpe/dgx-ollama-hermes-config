@@ -3,13 +3,13 @@
   "provider": {
     "ollama": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "vLLM (local)",
-      "options": { "baseURL": "http://vllm:8000/v1" },
+      "name": "Ollama (local)",
+      "options": { "baseURL": "http://ollama:11434/v1" },
       "models": {
-        "qwen3.6-27b-int4:128k": { "name": "Qwen3.6 27B INT4 AutoRound + MTP=2 (vLLM)" }
+        "qwen3.6-27b:128k": { "name": "Qwen3.6 27B Q5_K_M (Ollama)" }
       }
     }
   },
-  "model": "ollama/qwen3.6-27b-int4:128k",
-  "small_model": "ollama/qwen3.6-27b-int4:128k"
+  "model": "ollama/qwen3.6-27b:128k",
+  "small_model": "ollama/qwen3.6-27b:128k"
 }

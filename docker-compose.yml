@@ -571,9 +571,9 @@ services:
       - API_SERVER_KEY=${HERMES_API_KEY}
       - API_SERVER_HOST=0.0.0.0
       - HERMES_INFERENCE_PROVIDER=custom
-      - OPENAI_API_BASE_URL=http://vllm:8000/v1
+      - OPENAI_API_BASE_URL=http://ollama:11434/v1
       - OPENAI_API_KEY=none
-      - LLM_MODEL=qwen3.6-27b-int4:128k
+      - LLM_MODEL=qwen3.6-27b:128k
       - OPENCODE_URL=http://opencode:4096
       - OPENCODE_USERNAME=opencode
       - OPENCODE_PASSWORD=${OPENCODE_PASSWORD}
@@ -590,7 +590,10 @@ services:
     cap_drop:
       - DAC_OVERRIDE
     depends_on:
-      vllm:
+      # 2026-05-04 — was `vllm: service_healthy`. Flipped to ollama as
+      # part of the revert. vLLM stays in compose for the 7-day soak
+      # rollback path but isn't a startup dep anymore.
+      ollama:
         condition: service_healthy
       prototype-seeder:
         condition: service_started
@@ -604,16 +607,18 @@ services:
     volumes:
       - open-webui_data:/app/backend/data
     environment:
-      # Multi-URL form: hermes-agent for orchestrated chats + raw vllm for
-      # bare-model access. Both speak OpenAI-compat /v1; OLLAMA_BASE_URL was
-      # dropped because vLLM does not implement Ollama-native /api/*.
-      - OPENAI_API_BASE_URLS=http://hermes-agent:8642/v1;http://vllm:8000/v1
+      # Multi-URL form: hermes-agent for orchestrated chats + raw ollama
+      # for bare-model access. Both speak OpenAI-compat /v1.
+      # 2026-05-04 — flipped second URL from vllm:8000 to ollama:11434
+      # as part of the vLLM → Ollama revert.
+      - OPENAI_API_BASE_URLS=http://hermes-agent:8642/v1;http://ollama:11434/v1
       - OPENAI_API_KEYS=${HERMES_API_KEY};none
       - HTTPX_TIMEOUT=600
     depends_on:
       hermes-agent:
         condition: service_started
-      vllm:
+      # 2026-05-04 — flipped from vllm to ollama as part of the revert.
+      ollama:
         condition: service_healthy
     restart: always
 
@@ -647,7 +652,8 @@ services:
     cap_drop:
       - DAC_OVERRIDE
     depends_on:
-      vllm:
+      # 2026-05-04 — flipped from vllm to ollama as part of the revert.
+      ollama:
         condition: service_healthy
       prototype-seeder:
         condition: service_started

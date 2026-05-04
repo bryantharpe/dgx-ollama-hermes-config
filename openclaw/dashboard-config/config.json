@@ -2,7 +2,7 @@
   "ai": {
     "enabled": true,
     "gatewayPort": 18791,
-    "model": "qwen3.6-27b-int4:128k",
+    "model": "qwen3.6-27b:128k",
     "maxHistory": 6
   }
 }
