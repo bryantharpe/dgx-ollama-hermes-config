@@ -1,0 +1,37 @@
+# Production Modelfile for qwen3-coder-next:q5-131k (Qwen3-Coder-Next 80B-A3B
+# Q5 GGUF, 131k context, MoE). Used by the OpenClaw prototype-builder agent
+# to drive the meeting-specs-to-prototype skill chain.
+#
+# 2026-05-05 — promoted temperature from 0.1 to 0.3 after agent_prototype
+# probe sweep (eval/results/qwen3-coder-next_q5-131k/2026-05-05T14-22-21Z):
+#
+#   t=0.1  →  2/5  (model picks shortest plausible code at every step;
+#                   ships scaffold-only UI even though it has the budget
+#                   to write more)
+#   t=0.3  →  5/5  (full Recipe Keeper UI: search bar, list view, "Add
+#                   Recipe" button, ratings, tried-toggle, both seed
+#                   recipes — every transcript requirement rendered)
+#   t=0.5  →  2/5  (more wandering, doesn't complete the UI work)
+#
+# t=0.3 is the sweet spot. Higher entropy than 0.1 lets the model write
+# fuller responses; still coherent enough to wire the implementation.
+#
+# FROM is a direct blob path because `ollama pull` consistently fails on
+# manifest-commit for sharded HF GGUFs ("context deadline exceeded") even
+# though both blobs reach 100%. Same workaround pattern as the other
+# Modelfiles in this directory.
+FROM /root/.ollama/models/blobs/sha256-80d88823f4379fc9ef69a2fefbece60627999b079b72258618568b10f3ee9c75
+
+TEMPLATE {{ .Prompt }}
+SYSTEM You are a helpful coding assistant.
+RENDERER qwen3-coder
+PARSER qwen3-coder
+
+PARAMETER temperature 0.3
+PARAMETER top_k 20
+PARAMETER top_p 0.95
+PARAMETER num_ctx 131072
+PARAMETER num_thread 12
+PARAMETER stop <|im_start|>
+PARAMETER stop <|im_end|>
+PARAMETER stop <|endoftext|>

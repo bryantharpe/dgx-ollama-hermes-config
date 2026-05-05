@@ -32,6 +32,7 @@ import shutil
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -49,14 +50,41 @@ PROTOTYPES_DIR = REPO_ROOT / "prototypes"
 REGISTRY_PATH = PROTOTYPES_DIR / ".registry" / "ports.json"
 OPENCLAW_COMPOSE = REPO_ROOT / "openclaw" / "docker-compose.yml"
 
+# Dedicated agent for the probe — clone of `main` (Captain Nemo) defined in
+# ~/.openclaw/openclaw.json with id `eval-nemo`. Same model + tool profile +
+# subagent allowlist as main; only difference is the agent id, which gives
+# the probe its own session key (`agent:eval-nemo:main`) so accumulated
+# conversation history from the user's real chats doesn't contaminate the
+# test. The CLI's `--session-id` flag is ignored by the gateway for any
+# given agent (the gateway hardcodes `agent:<id>:main` as the session key),
+# so a separate agent is the only way to get true session isolation.
+EVAL_AGENT = "eval-nemo"
+
 PHASE1_TIMEOUT_S = 900       # 15 min — propose phase, no docker work
-PHASE2_TIMEOUT_S = 2400      # 40 min — build phase, includes container build
+PHASE2_TIMEOUT_S = 3600      # 60 min — build phase. Bumped from 40 min on
+                             # 2026-05-05: a successful Coder-Next @ t=0.3 run
+                             # ran 41 min in Phase 2 (orchestrator improvising
+                             # frontend code after the spawned build subagent
+                             # finished), squeaking past the prior ceiling.
+                             # Hour gives breathing room for the orchestrator
+                             # to verify + patch + redeploy without dying mid-
+                             # iteration.
 SUBPROCESS_GRACE_S = 120
-BUILD_POLL_S = 1800          # extra polling AFTER phase 2 returns
+BUILD_POLL_S = 3600          # extra polling AFTER phase 2 returns. Bumped from
+                             # 30 min for the same reason — the build subagent
+                             # often keeps editing files past the orchestrator
+                             # turn boundary; we want to capture the last-state
+                             # screenshot, not a transient mid-edit one.
 BUILD_POLL_INTERVAL_S = 15
 HTTP_PROBE_TIMEOUT_S = 10
 SCREENSHOT_TIMEOUT_MS = 30_000
 SPECS_SUBPATH = Path("openspec") / "changes" / "prototype"
+
+# Per-process unique suffix for slug uniquification. Set once at import time
+# so all fixtures in a single eval invocation share it. Tests can override by
+# putting `run_ts` on the ctx dict.
+import datetime as _dt
+_RUN_TS = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
 
 # Candidate fixtures — order matters: quick-mode runs only the first.
 FIXTURES = [
@@ -381,14 +409,30 @@ def _cleanup(slug: str, artefacts: Path) -> dict:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _run_fixture(fixture: dict, ctx: dict, fixture_dir: Path) -> dict:
-    slug = fixture["expected_slug"]
+    # Mint a unique slug per run by suffixing with the run timestamp. The
+    # transcript fixture text gets rewritten to substitute the new slug
+    # everywhere `expected_slug` appears, so the orchestrator's instructions
+    # match the slug we'll check on disk.
+    #
+    # Why: openclaw's Hindsight memory backend retains every prior
+    # `prototypes.store_spec` to the `bryan-prototypes` bank (per
+    # ~/.openclaw/openclaw.json). On repeat runs, recall fires on the
+    # stable slug and Captain Nemo refuses to regenerate ("recipe-keeper
+    # specs are already written"). Uniquifying the slug sidesteps that
+    # without disturbing the bank.
+    base_slug = fixture["expected_slug"]
+    run_ts = ctx.get("run_ts") or _RUN_TS
+    slug = f"{base_slug}-eval-{run_ts}"
+
     transcript_path = TRANSCRIPTS_DIR / fixture["transcript"]
-    transcript = transcript_path.read_text()
+    raw_transcript = transcript_path.read_text()
+    transcript = raw_transcript.replace(base_slug, slug)
 
     fixture_dir.mkdir(parents=True, exist_ok=True)
     print(f"  → fixture {fixture['id']} (slug={slug})", flush=True)
 
     # Refuse to run if the slug already exists — would clobber real work.
+    # (Highly unlikely with the timestamp suffix, but kept as a safety net.)
     if _slug_already_exists(slug):
         print(f"    ! slug {slug!r} already exists in registry or filesystem; "
               "skipping fixture to avoid clobbering existing work.", flush=True)
@@ -401,11 +445,21 @@ def _run_fixture(fixture: dict, ctx: dict, fixture_dir: Path) -> dict:
 
     run_record: dict = {
         "id": fixture["id"],
+        "base_slug": base_slug,
         "slug": slug,
         "transcript_chars": len(transcript),
     }
 
     # ── Phase 1: propose ─────────────────────────────────────────────────────
+    # Mint a fresh session id for this fixture so Captain Nemo's in-session
+    # conversation history doesn't contaminate the test. By default
+    # `openclaw-cli agent --agent main` reuses the agent's default session,
+    # which can carry weeks of unrelated chat history (Telegram, dashboard,
+    # prior eval runs). With a fresh UUID, both Phase 1 and Phase 2 land in
+    # an isolated session that only sees this fixture's two messages.
+    session_id = str(uuid.uuid4())
+    run_record["session_id"] = session_id
+
     print("    Phase 1: propose...", flush=True)
     t0 = time.time()
     phase1_message = (
@@ -415,6 +469,8 @@ def _run_fixture(fixture: dict, ctx: dict, fixture_dir: Path) -> dict:
         "to build it.\n\n--- TRANSCRIPT ---\n\n" + transcript
     )
     phase1 = _openclaw_agent(phase1_message,
+                             agent=EVAL_AGENT,
+                             session_id=session_id,
                              timeout_s=PHASE1_TIMEOUT_S)
     run_record["phase1_seconds"] = round(time.time() - t0, 1)
     run_record["phase1_returncode"] = phase1.get("returncode")
@@ -425,9 +481,7 @@ def _run_fixture(fixture: dict, ctx: dict, fixture_dir: Path) -> dict:
     (fixture_dir / "phase1.json").write_text(
         json.dumps(phase1.get("parsed") or {"_unparsed": True}, indent=2, default=str)
     )
-    session_id = _extract_session_id(phase1)
     phase1_text = _extract_response_text(phase1)
-    run_record["phase1_session_id"] = session_id
 
     specs_phase1 = _read_spec_files(slug)
     specs_present_phase1 = sum(1 for v in specs_phase1.values() if v)
@@ -445,6 +499,7 @@ def _run_fixture(fixture: dict, ctx: dict, fixture_dir: Path) -> dict:
     t0 = time.time()
     phase2 = _openclaw_agent(
         fixture["build_message"],
+        agent=EVAL_AGENT,
         session_id=session_id,
         timeout_s=PHASE2_TIMEOUT_S,
     )
